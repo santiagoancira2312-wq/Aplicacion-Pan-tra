@@ -1,0 +1,16 @@
+{
+  "name": "demo-vales-inventario",
+  "version": "1.0.0",
+  "description": "Demo - Aplicacion de Vales, Inventario y Control de Materiales (PWA)",
+  "type": "module",
+  "private": true,
+  "engines": { "node": ">=22.5.0" },
+  "scripts": {
+    "start": "node --no-warnings server/index.js",
+    "dev": "node --no-warnings --watch server/index.js",
+    "seed": "node --no-warnings server/seed.js",
+    "reset": "node --no-warnings server/seed.js --reset",
+    "test": "node --no-warnings --test test/*.test.js"
+  },
+  "dependencies": {}
+}
