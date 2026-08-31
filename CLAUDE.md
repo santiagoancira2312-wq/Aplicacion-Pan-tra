@@ -1,0 +1,183 @@
+# Demo Aplicacion — Vales, Inventario y Control de Materiales
+
+> Claude Code lee este archivo al abrir **cualquier** sesion sobre este
+> repositorio. Es la memoria compartida entre todos los chats del proyecto:
+> lo que este escrito aqui, cualquier chat nuevo ya lo sabe.
+
+## Que es este proyecto
+
+Aplicacion web responsiva (PWA) que digitaliza el proceso de vales en papel
+usado para retirar materiales del almacen durante la fabricacion de food trucks.
+
+**Es un DEMO.** No debe usar logotipos, nombre corporativo, colores oficiales
+ni branding de ninguna empresa real. Toda la informacion cargada es ficticia y
+esta pensada para sustituirse por datos reales desde la propia interfaz, sin
+reconstruir la aplicacion.
+
+Flujo que resuelve:
+
+```
+TRABAJADOR            SUPERVISOR             ALMACEN
+crea el vale   ->     autoriza total o  ->   prepara, entrega (total o parcial),
+(trailer + kits)      parcialmente           captura firma y descuenta inventario
+```
+
+## Como se ejecuta
+
+Requiere **Node.js 22.5 o superior**. No hay dependencias que instalar.
+
+```bash
+npm run seed      # carga los datos ficticios (solo la primera vez)
+npm start         # http://localhost:3000
+npm run reset     # borra la base y regenera el demo desde cero
+npm test          # pruebas de extremo a extremo (deben pasar siempre)
+```
+
+La Terminal debe quedarse abierta mientras se usa la aplicacion. Si el
+navegador dice `localhost refused to connect`, el servidor esta apagado:
+`cd ~/Downloads/demo-vales && npm start`.
+
+### Accesos de demostracion (ficticios)
+
+| Rol | Acceso | Clave |
+|---|---|---|
+| Trabajador de planta | `EMP-001` … `EMP-025` | PIN `300001` … |
+| Supervisor de area | `SUP-01` … `SUP-05` | PIN `100001` … |
+| Almacen / inventario | `ALM-01` … `ALM-03` | PIN `200001` … |
+| Trabajador empresa externa | `RNA-001` … `RNA-005` | PIN `400001` … |
+| Supervisor empresa externa | `RSU-01` | PIN `400010` |
+| Administrador general | `admin@demo.local` | `Demo.Admin.2026` |
+| Direccion | `direccion@demo.local` | `Demo.Direccion.2026` |
+
+## Mapa del proyecto
+
+```
+server/
+  index.js          Servidor HTTP, enrutador, limite de peticiones, cabeceras de seguridad
+  schema.sql        Modelo de datos completo (tablas, indices, vistas)
+  db.js             Conexion SQLite (WAL), migracion y transacciones
+  seed.js           Generador de datos ficticios de demostracion
+  lib/              http, auth (scrypt, sesiones, TOTP), rbac, auditoria, folio,
+                    csv, red autorizada, unidades, sql (updates parciales), notify
+  routes/           auth, catalogo, kits, vales, almacen, inventario,
+                    reyna, dashboard, analitica, admin, exportar
+public/
+  index.html        Armazon de la PWA        sw.js  Service worker
+  css/app.css       Sistema visual propio (industrial, claro y oscuro)
+  js/               api, ui, router, graficas (SVG), iconos (SVG), app
+  js/views/         24 pantallas de la interfaz
+test/flujo.test.js  Pruebas de extremo a extremo (13 casos)
+tools/              Generador de iconos PNG de la PWA
+```
+
+Donde tocar segun el cambio:
+
+- **Una pantalla se ve mal o le falta algo** -> `public/js/views/<vista>.js`
+- **Estilos, colores, tamanos** -> `public/css/app.css`
+- **Regla de negocio, calculo, permiso** -> `server/routes/<modulo>.js`
+- **Campo nuevo en la base** -> `server/schema.sql` + el route correspondiente
+- **Datos del demo** (mas materiales, otros kits) -> `server/seed/datos.js`
+
+## Reglas de negocio que NUNCA deben romperse
+
+1. **Las cuatro cantidades siempre se conservan**: ESTANDAR (del kit),
+   SOLICITADA (trabajador), AUTORIZADA (supervisor) y ENTREGADA (almacen).
+   Ninguna sobrescribe a otra.
+2. **El supervisor nunca modifica la cantidad solicitada**, solo la autorizada,
+   y no puede autorizar mas de lo solicitado.
+3. **El inventario solo baja al entregar fisicamente.** Crear o autorizar un
+   vale no descuenta: reserva (comprometido) y reduce el disponible.
+   `DISPONIBLE = FISICO - COMPROMETIDO`. El disponible si puede ser negativo
+   (hay mas autorizado que existencias); el **fisico nunca**.
+4. **El almacen no puede entregar mas de lo autorizado ni mas de lo que hay**
+   fisicamente.
+5. **Entrega parcial**: el vale queda abierto con su pendiente hasta
+   completarse o hasta que alguien autorizado lo cierre con motivo.
+6. **Precio historico**: el costo se congela al entregar y no cambia despues.
+7. **Kits versionados**: una version nueva no altera los vales historicos;
+   cada vale conserva la version que uso y su cantidad estandar.
+8. **Kit editable**: cambiar una cantidad en un vale no modifica el kit maestro.
+9. **Catalogo cerrado**: el trabajador nunca escribe el nombre del material.
+   Busca por alias, pero el vale guarda SKU + nombre oficial.
+10. **Unidades respetadas**: no existen "1.77 piezas". Toda cantidad se ajusta
+    a los decimales de su unidad.
+11. **Devoluciones** solo son validas cuando el almacen las confirma.
+12. **Todo cambio critico queda en auditoria** con usuario, fecha, valor
+    anterior, valor nuevo y motivo. No se borra informacion historica desde la
+    interfaz: se usa activo/inactivo.
+
+## Convenciones de codigo
+
+- **Todo en espanol** (variables, funciones, comentarios, mensajes) y **sin
+  acentos en el codigo** para evitar problemas de codificacion.
+- **Sin dependencias externas.** Solo `node:http`, `node:sqlite`, `node:crypto`.
+  No agregar paquetes de npm ni librerias por CDN: la politica de seguridad de
+  contenido (CSP) solo permite recursos del propio origen.
+- Graficas e iconos se generan en SVG dentro del navegador
+  (`public/js/graficas.js`, `public/js/iconos.js`). No usar emoji en la interfaz.
+- Las actualizaciones parciales usan `server/lib/sql.js` para no borrar campos
+  que el cliente no envio.
+- **`npm test` debe pasar siempre** antes de dar un cambio por terminado.
+- Commits en espanol, explicando el porque del cambio.
+
+## Estado actual
+
+Funciona de extremo a extremo y esta probado: 13 pruebas automatizadas cubren
+el flujo completo (crear vale con kit ajustado, autorizacion parcial,
+preparacion, entrega parcial con firma, devolucion, alcance por rol y empresa,
+precio historico, cierre mensual, versionado de kits y exportacion).
+
+Pendientes conocidos (documentados en el README):
+
+- Notificaciones push reales (el service worker esta listo; falta el servidor
+  de suscripciones y las llaves VAPID). Hoy las notificaciones son dentro de la
+  aplicacion.
+- Carga de fotografias de materiales (el campo existe en el catalogo, falta el
+  almacenamiento de archivos).
+- Para produccion: HTTPS con `SECURE_COOKIES=1`, respaldos, y activar la
+  restriccion de red con los rangos reales de la planta.
+
+## Limitacion conocida: subir cambios a GitHub
+
+La app de Claude en GitHub tiene permiso de **lectura pero no de escritura**
+sobre este repositorio, asi que Claude **no puede hacer `git push`**. Los
+cambios se suben desde la Mac del usuario con **GitHub Desktop** (Commit ->
+Push origin), o habilitando el permiso de escritura en
+`github.com/settings/installations`.
+
+Cuando termines un cambio en un chat, deja el commit hecho y avisa que falta
+subirlo con GitHub Desktop.
+
+## Como trabajar en cada tipo de chat
+
+El usuario mantiene chats separados por proposito. Todos comparten este archivo
+como contexto, y el repositorio como fuente de verdad.
+
+### Chat de CODIGO — "agrega esto, quita aquello"
+
+Cambios reales en la aplicacion. Aqui se edita, se prueba y se hace commit.
+Antes de dar por terminado un cambio: correr `npm test`, y cuando sea una
+pantalla, verificar el resultado en la aplicacion, no solo que compile.
+
+### Chat de DUDAS — "no se como hacer X" / "me esta fallando Y"
+
+Preguntas de operacion y fallas: la app no abre, un error en la Terminal, como
+se usa una pantalla, que significa un dato. Explicar en lenguaje simple, con
+pasos concretos para una persona que no programa (Mac, Terminal, GitHub
+Desktop). No cambiar codigo aqui salvo que el usuario lo pida.
+
+### Chat de INFORMACION GENERAL — el proyecto en conjunto
+
+Alcance, decisiones, como presentarlo a una empresa fabricante de food trucks,
+que falta para produccion, costos y tiempos. Consultas y explicaciones; sin
+cambios de codigo.
+
+## Contexto del usuario
+
+- Trabaja en Mac, con la Terminal y GitHub Desktop; **no es programador**.
+  Explicar sin jerga y dar los pasos exactos (que abrir, que pegar, que esperar).
+- El proyecto local vive en `~/Downloads/demo-vales`.
+- El repositorio es `santiagoancira2312-wq/Aplicacion-Pan-tra`, rama de trabajo
+  `claude/demo-vales-inventario-wx3qqn`.
+- El objetivo final es presentar el demo a una empresa fabricante de food
+  trucks, asi que la aplicacion debe verse profesional, industrial y terminada.
