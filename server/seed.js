@@ -66,9 +66,16 @@ tx(() => {
   }
 
   const unidades = {};
+  const decimalesUnidad = {};
   for (const [codigo, nombre, dec] of D.UNIDADES) {
     unidades[codigo] = Number(run('INSERT INTO unidades (codigo, nombre, decimales) VALUES (?, ?, ?)', codigo, nombre, dec).lastInsertRowid);
+    decimalesUnidad[unidades[codigo]] = dec;
   }
+  // Las cantidades siempre respetan los decimales de la unidad: no existen 1.77 piezas.
+  const porUnidad = (cantidad, unidadId) => {
+    const f = 10 ** (decimalesUnidad[unidadId] ?? 2);
+    return Math.max(1 / f, Math.round(Number(cantidad) * f) / f);
+  };
 
   const categorias = {};
   for (const nombre of D.CATEGORIAS) {
@@ -99,7 +106,10 @@ tx(() => {
       sku, nombre, categorias[cat], unidades[uni], min, max, reorden, costo, ubic,
       proveedores[provIdx - 1], ts(DIAS_HISTORIA + 5)
     ).lastInsertRowid);
-    materiales[sku] = { id, sku, nombre, unidad_id: unidades[uni], costo, min, max, reorden, categoria: cat };
+    materiales[sku] = {
+      id, sku, nombre, unidad_id: unidades[uni], costo, min, max, reorden,
+      categoria: cat, decimales: decimalesUnidad[unidades[uni]]
+    };
     run('INSERT INTO material_costos (material_id, costo, vigente_desde, motivo) VALUES (?, ?, ?, ?)',
       id, costo, ts(DIAS_HISTORIA + 5), 'Costo inicial del catalogo');
     for (const a of alias) run('INSERT OR IGNORE INTO material_alias (material_id, alias) VALUES (?, ?)', id, a);
@@ -364,7 +374,7 @@ tx(() => {
           let cantidad = ki.cantidad_estandar;
           if (random() < 0.3) {
             const factor = 0.7 + random() * 0.7;
-            cantidad = Math.max(1, round(ki.cantidad_estandar * factor));
+            cantidad = porUnidad(Math.max(1 / 100, ki.cantidad_estandar * factor), ki.unidad_id);
           }
           lineas.push({ materialId: ki.material_id, estandar: ki.cantidad_estandar, cantidad, valeKitId, orden: orden++ });
         }
@@ -450,7 +460,8 @@ tx(() => {
     for (const it of v.itemIds) {
       let autorizada = it.solicitada;
       if (random() < 0.12) {
-        autorizada = Math.max(1, round(it.solicitada * (0.4 + random() * 0.5)));
+        const mat = listaMateriales.find((m) => m.id === it.materialId);
+        autorizada = porUnidad(it.solicitada * (0.4 + random() * 0.5), mat.unidad_id);
         recorte = true;
       }
       it.autorizada = autorizada;
@@ -495,8 +506,10 @@ tx(() => {
       const disponible = stock.get(it.materialId);
       let cantidad = it.autorizada;
       // A veces no alcanza el material fisico: se genera entrega parcial.
-      if (cantidad > disponible) cantidad = Math.max(0, disponible);
-      else if (random() < 0.04) cantidad = Math.max(0, round(cantidad * (0.3 + random() * 0.5)));
+      const matLinea = listaMateriales.find((m) => m.id === it.materialId);
+      if (cantidad > disponible) cantidad = Math.max(0, porUnidad(disponible, matLinea.unidad_id));
+      else if (random() < 0.04) cantidad = porUnidad(cantidad * (0.3 + random() * 0.5), matLinea.unidad_id);
+      if (cantidad > it.autorizada) cantidad = it.autorizada;
       if (cantidad > 0) entregas.push({ it, cantidad });
     }
     if (!entregas.length) continue;

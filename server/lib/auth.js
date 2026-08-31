@@ -101,6 +101,34 @@ export function requiresCaptcha(identifier, ip) {
   return recentFailures(identifier, ip) >= umbral;
 }
 
+/**
+ * Verificacion adicional SOLO ante actividad sospechosa.
+ * Durante el uso normal en planta la prioridad es la velocidad, por eso nunca
+ * se muestra. Es una operacion aritmetica simple resuelta en el propio servidor,
+ * sin servicios de terceros ni seguimiento del usuario.
+ */
+const retos = new Map();
+
+export function generarReto(ip) {
+  const a = 2 + Math.floor(Math.random() * 8);
+  const b = 2 + Math.floor(Math.random() * 8);
+  retos.set(ip || '', { respuesta: a + b, expira: Date.now() + 5 * 60000 });
+  return `${a} + ${b}`;
+}
+
+export function verificarReto(ip, respuesta) {
+  const reto = retos.get(ip || '');
+  if (!reto || reto.expira < Date.now()) return false;
+  const ok = Number(respuesta) === reto.respuesta;
+  if (ok) retos.delete(ip || '');
+  return ok;
+}
+
+export function purgarRetos() {
+  const ahora = Date.now();
+  for (const [k, v] of retos) if (v.expira < ahora) retos.delete(k);
+}
+
 export function applyFailure(user, identifier, ip) {
   recordAttempt(identifier, ip, false);
   if (!user) return;
@@ -164,6 +192,7 @@ export function loadSession(token) {
 }
 
 export function purgeExpired() {
+  purgarRetos();
   run(`DELETE FROM sessions WHERE expires_at < datetime('now', '-1 day')`);
   run(`DELETE FROM login_attempts WHERE created_at < datetime('now', '-7 days')`);
 }

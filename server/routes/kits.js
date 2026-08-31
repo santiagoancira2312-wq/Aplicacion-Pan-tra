@@ -3,6 +3,7 @@ import { badRequest, notFound, conflict } from '../lib/http.js';
 import { requireUser } from './auth.js';
 import { requirePerm, puedeVerCostos } from '../lib/rbac.js';
 import { audit } from '../lib/audit.js';
+import { redondearPorUnidad } from '../lib/unidades.js';
 
 function itemsDeVersion(versionId, verCostos) {
   const filas = all(
@@ -166,7 +167,7 @@ export default function register(r) {
     for (const it of items) {
       const mat = get('SELECT * FROM materiales WHERE id = ? AND activo = 1', Number(it.material_id));
       if (!mat) throw badRequest(`Material no valido en el kit (id ${it.material_id})`);
-      const cantidad = Number(it.cantidad_estandar);
+      const cantidad = redondearPorUnidad(Number(it.cantidad_estandar), mat.unidad_id);
       if (!Number.isFinite(cantidad) || cantidad <= 0) {
         throw badRequest(`Cantidad estandar no valida para ${mat.nombre}`);
       }

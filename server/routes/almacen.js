@@ -6,6 +6,7 @@ import { requirePerm } from '../lib/rbac.js';
 import { audit } from '../lib/audit.js';
 import { notificar } from '../lib/notify.js';
 import { detalleVale } from './vales.js';
+import { redondearPorUnidad } from '../lib/unidades.js';
 
 const round = (n) => Math.round(n * 1000) / 1000;
 
@@ -182,7 +183,7 @@ export default function register(r) {
       for (const l of lineas) {
         const it = items.get(Number(l.vale_item_id));
         if (!it) throw badRequest('Linea de vale no valida');
-        const cantidad = round(Number(l.cantidad));
+        const cantidad = redondearPorUnidad(Number(l.cantidad), it.unidad_id);
         if (!Number.isFinite(cantidad) || cantidad < 0) throw badRequest(`Cantidad no valida en ${it.nombre_snapshot}`);
         if (cantidad === 0) continue;
 
@@ -288,7 +289,7 @@ export default function register(r) {
       for (const l of lineas) {
         const it = get('SELECT * FROM vale_items WHERE id = ? AND vale_id = ?', Number(l.vale_item_id), valeId);
         if (!it) throw badRequest('Linea de vale no valida');
-        const cantidad = round(Number(l.cantidad));
+        const cantidad = redondearPorUnidad(Number(l.cantidad), it.unidad_id);
         if (!(cantidad > 0)) continue;
 
         const yaDevuelto = get(

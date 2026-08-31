@@ -1,7 +1,8 @@
 import { get, run, all, setting } from '../db.js';
 import {
   hashSecret, verifySecret, createSession, destroySession, applyFailure,
-  recordAttempt, isLocked, requiresCaptcha, verifyTotp, generateTotpSecret, otpauthUrl
+  recordAttempt, isLocked, requiresCaptcha, verifyTotp, generateTotpSecret, otpauthUrl,
+  generarReto, verificarReto
 } from '../lib/auth.js';
 import { badRequest, unauthorized, forbidden, HttpError } from '../lib/http.js';
 import { audit } from '../lib/audit.js';
@@ -43,6 +44,13 @@ export default function register(r) {
     const pin = String(ctx.body.pin || '').trim();
     if (!employee_id || !/^\d{6}$/.test(pin)) throw badRequest('Ingrese su ID de empleado y un PIN de 6 digitos');
 
+    // Verificacion adicional solo si hay muchos intentos fallidos recientes.
+    if (requiresCaptcha(employee_id, ctx.ip) && !verificarReto(ctx.ip, ctx.body.verificacion)) {
+      throw badRequest('Por seguridad, resuelva la verificacion mostrada e intente de nuevo', {
+        requiere_verificacion: true, reto: generarReto(ctx.ip)
+      });
+    }
+
     const user = get('SELECT * FROM users WHERE employee_id = ? COLLATE NOCASE', employee_id);
 
     if (user && isLocked(user)) {
@@ -74,6 +82,12 @@ export default function register(r) {
     const password = String(ctx.body.password || '');
     const codigo2fa = String(ctx.body.codigo || '').trim();
     if (!identificador || !password) throw badRequest('Ingrese usuario y contrasena');
+
+    if (requiresCaptcha(identificador, ctx.ip) && !verificarReto(ctx.ip, ctx.body.verificacion)) {
+      throw badRequest('Por seguridad, resuelva la verificacion mostrada e intente de nuevo', {
+        requiere_verificacion: true, reto: generarReto(ctx.ip)
+      });
+    }
 
     const user = get(
       'SELECT * FROM users WHERE (email = ? COLLATE NOCASE OR employee_id = ? COLLATE NOCASE)',
@@ -127,11 +141,15 @@ export default function register(r) {
   });
 
   /** El formulario de acceso pregunta si debe mostrar verificacion adicional. */
-  r.get('/api/auth/estado', (ctx) => ({
-    captcha: requiresCaptcha(String(ctx.query.usuario || ''), ctx.ip),
-    red_autorizada: redAutorizada(ctx.ip),
-    restriccion_red: setting('restriccion_red_activa', '0') === '1'
-  }));
+  r.get('/api/auth/estado', (ctx) => {
+    const captcha = requiresCaptcha(String(ctx.query.usuario || ''), ctx.ip);
+    return {
+      captcha,
+      reto: captcha ? generarReto(ctx.ip) : null,
+      red_autorizada: redAutorizada(ctx.ip),
+      restriccion_red: setting('restriccion_red_activa', '0') === '1'
+    };
+  });
 
   // -------------------------------------------------------------------------
   // Perfil propio

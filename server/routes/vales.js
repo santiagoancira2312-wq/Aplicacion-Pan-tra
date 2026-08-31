@@ -6,6 +6,7 @@ import { generarFolio } from '../lib/folio.js';
 import { audit } from '../lib/audit.js';
 import { notificar, notificarRol } from '../lib/notify.js';
 import { redAutorizada } from '../lib/net.js';
+import { redondearPorUnidad } from '../lib/unidades.js';
 
 const ESTADOS_ABIERTOS = ['PENDIENTE', 'APROBADO', 'APROBADO_PARCIAL', 'EN_PREPARACION', 'PREPARADO', 'ENTREGA_PARCIAL'];
 
@@ -245,6 +246,8 @@ export default function register(r) {
       const insertItem = (materialId, cantidad, estandar, valeKitId) => {
         const mat = get('SELECT * FROM materiales WHERE id = ? AND activo = 1', materialId);
         if (!mat) throw badRequest(`Material no disponible en el catalogo (id ${materialId})`);
+        // La cantidad se ajusta a los decimales que admite la unidad del material.
+        cantidad = redondearPorUnidad(cantidad, mat.unidad_id);
         if (cantidad <= 0) throw badRequest(`La cantidad de ${mat.nombre} debe ser mayor a cero`);
         run(
           `INSERT INTO vale_items
@@ -371,7 +374,7 @@ export default function register(r) {
       for (const it of items) {
         const ajuste = ajustes.get(it.id);
         let autorizada = ajuste != null && ajuste.cantidad_autorizada != null
-          ? num(ajuste.cantidad_autorizada, it.nombre_snapshot)
+          ? redondearPorUnidad(num(ajuste.cantidad_autorizada, it.nombre_snapshot), it.unidad_id)
           : it.cantidad_solicitada;
         if (autorizada > it.cantidad_solicitada) {
           throw badRequest(`No puede autorizar mas de lo solicitado en ${it.nombre_snapshot}`);

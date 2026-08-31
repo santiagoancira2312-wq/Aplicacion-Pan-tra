@@ -5,6 +5,7 @@ import { requirePerm, puedeVerCostos } from '../lib/rbac.js';
 import { audit } from '../lib/audit.js';
 import { generarFolio } from '../lib/folio.js';
 import { aplicarMovimiento } from './almacen.js';
+import { redondearPorUnidad } from '../lib/unidades.js';
 
 export default function register(r) {
   // -------------------------------------------------------------------------
@@ -132,7 +133,7 @@ export default function register(r) {
       for (const it of items) {
         const mat = get('SELECT * FROM materiales WHERE id = ? AND activo = 1', Number(it.material_id));
         if (!mat) throw badRequest('Material no valido en la entrada');
-        const cantidad = Number(it.cantidad);
+        const cantidad = redondearPorUnidad(Number(it.cantidad), mat.unidad_id);
         if (!Number.isFinite(cantidad) || cantidad <= 0) throw badRequest(`Cantidad no valida para ${mat.nombre}`);
         const costo = it.costo !== undefined && it.costo !== null && it.costo !== '' ? Number(it.costo) : mat.costo;
 
@@ -176,11 +177,10 @@ export default function register(r) {
     const motivo = String(ctx.body.motivo || '').trim();
     if (!motivo) throw badRequest('Todo ajuste requiere un motivo');
     const materialId = Number(ctx.body.material_id);
-    const cantidad = Number(ctx.body.cantidad);
-    if (!Number.isFinite(cantidad) || cantidad <= 0) throw badRequest('Cantidad no valida');
-
     const mat = get('SELECT * FROM materiales WHERE id = ?', materialId);
     if (!mat) throw notFound('Material no encontrado');
+    const cantidad = redondearPorUnidad(Number(ctx.body.cantidad), mat.unidad_id);
+    if (!Number.isFinite(cantidad) || cantidad <= 0) throw badRequest('Cantidad no valida');
     const signo = tipo === 'AJUSTE_POSITIVO' ? +1 : -1;
     if (signo < 0 && cantidad > mat.stock_fisico) {
       throw badRequest(`No puede descontar mas de la existencia actual (${mat.stock_fisico})`);
