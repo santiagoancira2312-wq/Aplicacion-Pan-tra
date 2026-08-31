@@ -4,6 +4,7 @@ import { requireUser } from './auth.js';
 import { requirePerm, can } from '../lib/rbac.js';
 import { audit, diff } from '../lib/audit.js';
 import { hashSecret } from '../lib/auth.js';
+import { sentenciaActualizacion } from '../lib/sql.js';
 import { DEFAULT_SETTINGS } from '../config.js';
 
 const ROLES = ['ADMIN', 'DIRECCION', 'SUPERVISOR', 'ALMACEN', 'TRABAJADOR'];
@@ -97,15 +98,10 @@ export default function register(r) {
       if (otros === 0) throw conflict('Debe existir al menos un Administrador activo');
     }
 
-    run(
-      `UPDATE users SET nombre = COALESCE(?, nombre), email = ?, rol = COALESCE(?, rol),
-              empresa = COALESCE(?, empresa), area_id = ?, supervisor_id = ?, telefono = ?,
-              activo = COALESCE(?, activo), updated_at = datetime('now')
-       WHERE id = ?`,
-      b.nombre ?? null, b.email ?? null, b.rol ?? null, b.empresa ?? null,
-      b.area_id ?? null, b.supervisor_id ?? null, b.telefono ?? null,
-      b.activo === undefined ? null : (b.activo ? 1 : 0), id
+    const { sql, valores } = sentenciaActualizacion(
+      'users', CAMPOS_USER, b, ["updated_at = datetime('now')"]
     );
+    run(sql, ...valores, id);
     // Al desactivar se cierran sus sesiones abiertas.
     if (b.activo === false || b.activo === 0) {
       run(`UPDATE sessions SET revoked_at = datetime('now') WHERE user_id = ? AND revoked_at IS NULL`, id);
@@ -180,14 +176,10 @@ export default function register(r) {
     requirePerm(user, 'catalogo.escribir');
     const antes = get('SELECT * FROM motivos_rechazo WHERE id = ?', Number(ctx.params.id));
     if (!antes) throw notFound('Motivo no encontrado');
-    run(
-      `UPDATE motivos_rechazo SET texto = COALESCE(?, texto), requiere_comentario = COALESCE(?, requiere_comentario),
-              activo = COALESCE(?, activo), orden = COALESCE(?, orden) WHERE id = ?`,
-      ctx.body.texto ?? null,
-      ctx.body.requiere_comentario === undefined ? null : (ctx.body.requiere_comentario ? 1 : 0),
-      ctx.body.activo === undefined ? null : (ctx.body.activo ? 1 : 0),
-      ctx.body.orden ?? null, antes.id
+    const { sql, valores } = sentenciaActualizacion(
+      'motivos_rechazo', ['texto', 'requiere_comentario', 'activo', 'orden'], ctx.body
     );
+    run(sql, ...valores, antes.id);
     audit({ user, ip: ctx.ip }, { accion: 'MOTIVO_ACTUALIZADO', entidad: 'motivos_rechazo', entidad_id: antes.id, antes, nuevo: ctx.body });
     return { ok: true };
   });

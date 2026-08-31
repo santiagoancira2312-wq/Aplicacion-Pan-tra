@@ -4,6 +4,7 @@ import { requireUser } from './auth.js';
 import { requirePerm, puedeVerCostos } from '../lib/rbac.js';
 import { audit } from '../lib/audit.js';
 import { redondearPorUnidad } from '../lib/unidades.js';
+import { sentenciaActualizacion } from '../lib/sql.js';
 
 function itemsDeVersion(versionId, verCostos) {
   const filas = all(
@@ -120,11 +121,8 @@ export default function register(r) {
     const kit = get('SELECT * FROM kits WHERE id = ?', Number(ctx.params.id));
     if (!kit) throw notFound('Kit no encontrado');
     const b = ctx.body;
-    run(
-      `UPDATE kits SET nombre = COALESCE(?, nombre), area_id = ?, descripcion = ?, activo = COALESCE(?, activo) WHERE id = ?`,
-      b.nombre ?? null, b.area_id ?? null, b.descripcion ?? null,
-      b.activo === undefined ? null : (b.activo ? 1 : 0), kit.id
-    );
+    const { sql, valores } = sentenciaActualizacion('kits', ['nombre', 'area_id', 'descripcion', 'activo'], b);
+    run(sql, ...valores, kit.id);
     audit({ user, ip: ctx.ip }, {
       accion: 'KIT_ACTUALIZADO', entidad: 'kits', entidad_id: kit.id,
       antes: { nombre: kit.nombre, area_id: kit.area_id, activo: kit.activo }, nuevo: b, motivo: b.motivo || null

@@ -30,11 +30,14 @@ export function generarFolio(tabla = 'vales', settingKey = 'folio_formato') {
     if (Number.isFinite(n)) siguiente = n + 1;
   }
 
-  let folio = prefijo + String(siguiente).padStart(ancho, '0') + base.split('}').slice(-1)[0];
+  const sufijo = base.split('}').slice(-1)[0];
+  const armar = (n) => prefijo + String(n).padStart(ancho, '0') + sufijo;
+
+  let folio = armar(siguiente);
   // Garantia adicional de unicidad ante concurrencia.
   while (get(`SELECT 1 AS x FROM ${tabla} WHERE folio = ?`, folio)) {
     siguiente += 1;
-    folio = prefijo + String(siguiente).padStart(ancho, '0');
+    folio = armar(siguiente);
   }
   return folio;
 }

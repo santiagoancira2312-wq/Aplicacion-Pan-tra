@@ -292,6 +292,57 @@ test('el administrador configura el sistema sin tocar codigo', async () => {
   assert.equal(anterior.usos, usosPrevios, 'los vales historicos conservan su version');
 });
 
+test('una actualizacion parcial no borra los demas datos', async () => {
+  // Desactivar un kit no debe perder su area ni su descripcion.
+  const kits = await api('GET', '/api/kits?incluir_inactivos=1', undefined, 'admin');
+  const kit = kits.datos.kits.find((k) => k.area_id) || kits.datos.kits[0];
+  const antes = await api('GET', `/api/kits/${kit.id}`, undefined, 'admin');
+
+  const apagado = await api('PUT', `/api/kits/${kit.id}`, { activo: false }, 'admin');
+  assert.equal(apagado.status, 200);
+  const despues = await api('GET', `/api/kits/${kit.id}`, undefined, 'admin');
+  assert.equal(despues.datos.kit.activo, 0);
+  assert.equal(despues.datos.kit.area_id, antes.datos.kit.area_id, 'conserva el area');
+  assert.equal(despues.datos.kit.descripcion, antes.datos.kit.descripcion, 'conserva la descripcion');
+  assert.equal(despues.datos.kit.nombre, antes.datos.kit.nombre);
+  await api('PUT', `/api/kits/${kit.id}`, { activo: true }, 'admin');
+
+  // Lo mismo al desactivar un usuario: conserva correo, area y supervisor.
+  const usuarios = await api('GET', '/api/usuarios?rol=TRABAJADOR', undefined, 'admin');
+  const objetivo = usuarios.datos.usuarios.find((u) => u.area_id && u.supervisor_id);
+  await api('PUT', `/api/usuarios/${objetivo.id}`, { activo: false }, 'admin');
+  const recargado = await api('GET', `/api/usuarios?q=${encodeURIComponent(objetivo.employee_id)}`, undefined, 'admin');
+  const u2 = recargado.datos.usuarios.find((u) => u.id === objetivo.id);
+  assert.equal(u2.activo, 0);
+  assert.equal(u2.area_id, objetivo.area_id, 'conserva el area');
+  assert.equal(u2.supervisor_id, objetivo.supervisor_id, 'conserva el supervisor');
+  await api('PUT', `/api/usuarios/${objetivo.id}`, { activo: true }, 'admin');
+});
+
+test('el almacen nunca entrega mas de lo que hay en existencia', async () => {
+  // Con un material agotado, la entrega debe rechazarse.
+  const inv = await api('GET', '/api/inventario?semaforo=AGOTADO', undefined, 'admin');
+  if (!inv.datos.inventario.length) return; // el demo puede no tener agotados
+  const agotado = inv.datos.inventario[0];
+  assert.ok(agotado.stock_fisico <= 0);
+
+  const catalogos = await api('GET', '/api/catalogos', undefined, 'admin');
+  const creado = await api('POST', '/api/vales', {
+    trailer_id: catalogos.datos.trailers[0].id,
+    items: [{ material_id: agotado.id, cantidad: 5 }]
+  }, 'admin');
+  assert.equal(creado.status, 200);
+
+  await api('POST', `/api/vales/${creado.datos.id}/autorizar`, { decision: 'APROBAR' }, 'admin');
+  const firma = 'data:image/png;base64,' + Buffer.from(`sin-stock-${Date.now()}-${'y'.repeat(500)}`).toString('base64');
+  const entrega = await api('POST', `/api/almacen/vales/${creado.datos.id}/entregar`, {
+    receptor_nombre: 'Prueba', firma,
+    lineas: [{ vale_item_id: creado.datos.items[0].id, cantidad: 5 }]
+  }, 'admin');
+  assert.equal(entrega.status, 409, 'debe rechazar por existencia insuficiente');
+  assert.match(entrega.datos.error, /insuficiente/i);
+});
+
 test('la exportacion a Excel entrega CSV', async () => {
   const res = await fetch(`${BASE}/api/exportar/inventario`, { headers: { Cookie: cookies.get('admin') } });
   assert.equal(res.status, 200);

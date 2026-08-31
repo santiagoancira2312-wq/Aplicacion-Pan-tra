@@ -37,7 +37,8 @@ export function aplicarMovimiento({
 function recalcularEstadoVale(valeId) {
   const items = all('SELECT * FROM vale_items WHERE vale_id = ?', valeId);
   const conAutorizacion = items.filter((i) => i.cantidad_autorizada > 0);
-  const completas = conAutorizacion.every((i) => i.cantidad_entregada >= i.cantidad_autorizada);
+  const completas = conAutorizacion.length > 0
+    && conAutorizacion.every((i) => i.cantidad_entregada >= i.cantidad_autorizada);
   const algunaEntrega = items.some((i) => i.cantidad_entregada > 0);
 
   for (const it of items) {

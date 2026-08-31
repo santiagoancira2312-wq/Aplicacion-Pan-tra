@@ -3,6 +3,7 @@ import { badRequest, notFound, conflict } from '../lib/http.js';
 import { requireUser } from './auth.js';
 import { requirePerm, puedeVerCostos, can } from '../lib/rbac.js';
 import { audit, diff } from '../lib/audit.js';
+import { sentenciaActualizacion } from '../lib/sql.js';
 
 const CAMPOS_MATERIAL = [
   'sku', 'nombre', 'descripcion', 'categoria_id', 'subcategoria_id', 'unidad_id',
@@ -116,19 +117,15 @@ export default function register(r) {
     const cambios = diff(antes, b, CAMPOS_MATERIAL);
 
     tx(() => {
-      run(
-        `UPDATE materiales SET
-           nombre = COALESCE(?, nombre), descripcion = ?, categoria_id = ?, subcategoria_id = ?,
-           unidad_id = COALESCE(?, unidad_id), stock_min = COALESCE(?, stock_min),
-           stock_max = COALESCE(?, stock_max), punto_reorden = COALESCE(?, punto_reorden),
-           ubicacion = ?, proveedor_id = ?, foto = ?,
-           activo = COALESCE(?, activo), updated_at = datetime('now')
-         WHERE id = ?`,
-        b.nombre ?? null, b.descripcion ?? null, b.categoria_id ?? null, b.subcategoria_id ?? null,
-        b.unidad_id ?? null, b.stock_min ?? null, b.stock_max ?? null, b.punto_reorden ?? null,
-        b.ubicacion ?? null, b.proveedor_id ?? null, b.foto ?? null,
-        b.activo === undefined ? null : (b.activo ? 1 : 0), id
+      // Solo se actualizan los campos enviados: una edicion parcial nunca borra
+      // datos que el cliente no incluyo.
+      const { sql, valores } = sentenciaActualizacion(
+        'materiales',
+        ['nombre', 'descripcion', 'categoria_id', 'subcategoria_id', 'unidad_id',
+          'stock_min', 'stock_max', 'punto_reorden', 'ubicacion', 'proveedor_id', 'foto', 'activo'],
+        b, ["updated_at = datetime('now')"]
       );
+      run(sql, ...valores, id);
 
       // El costo se versiona: el precio ya usado en entregas no cambia retroactivamente.
       if (b.costo !== undefined && Number(b.costo) !== antes.costo) {
@@ -253,15 +250,12 @@ export default function register(r) {
     const antes = get('SELECT * FROM trailers WHERE id = ?', id);
     if (!antes) throw notFound('Trailer no encontrado');
     const b = ctx.body;
-    run(
-      `UPDATE trailers SET numero = COALESCE(?, numero), modelo = ?, tamano = ?, cliente = ?,
-              tipo_config = ?, fecha_inicio = ?, fecha_fin = ?, estado = COALESCE(?, estado),
-              activo = COALESCE(?, activo)
-       WHERE id = ?`,
-      b.numero ?? null, b.modelo ?? null, b.tamano ?? null, b.cliente ?? null, b.tipo_config ?? null,
-      b.fecha_inicio ?? null, b.fecha_fin ?? null, b.estado ?? null,
-      b.activo === undefined ? null : (b.activo ? 1 : 0), id
+    const { sql, valores } = sentenciaActualizacion(
+      'trailers',
+      ['numero', 'modelo', 'tamano', 'cliente', 'tipo_config', 'fecha_inicio', 'fecha_fin', 'estado', 'activo'],
+      b
     );
+    run(sql, ...valores, id);
     const cambios = diff(antes, b, ['numero', 'modelo', 'tamano', 'cliente', 'tipo_config', 'fecha_inicio', 'fecha_fin', 'estado', 'activo']);
     audit({ user, ip: ctx.ip }, {
       accion: 'TRAILER_ACTUALIZADO', entidad: 'trailers', entidad_id: id,
