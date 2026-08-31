@@ -76,6 +76,12 @@ tx(() => {
     const f = 10 ** (decimalesUnidad[unidadId] ?? 2);
     return Math.max(1 / f, Math.round(Number(cantidad) * f) / f);
   };
+  // Al topar contra la existencia fisica se redondea hacia abajo:
+  // el almacen nunca puede entregar mas de lo que realmente tiene.
+  const pisoUnidad = (cantidad, unidadId) => {
+    const f = 10 ** (decimalesUnidad[unidadId] ?? 2);
+    return Math.max(0, Math.floor(Number(cantidad) * f) / f);
+  };
 
   const categorias = {};
   for (const nombre of D.CATEGORIAS) {
@@ -279,15 +285,34 @@ tx(() => {
 
   // Abasto inicial y reabastecimientos periodicos.
   const listaMateriales = Object.values(materiales);
+
+  // Un grupo de materiales se surte corto y no se reabastece al mismo ritmo.
+  // Asi el demo muestra el semaforo, las alertas, la prediccion de compra y las
+  // entregas parciales por falta de existencia, tal como ocurre en la practica.
+  const escasos = new Set();
+  for (const m of listaMateriales) {
+    if (escasos.size < 7 && random() < 0.22) escasos.add(m.id);
+  }
+
   registrarEntrada(
     ts(DIAS_HISTORIA, 9, 30),
-    listaMateriales.map((m) => ({ material: m, cantidad: Math.ceil(m.max * 2) || 80, costo: m.costo })),
+    listaMateriales.map((m) => ({
+      material: m,
+      cantidad: escasos.has(m.id)
+        ? Math.max(1, Math.ceil((m.min || 5) * 2.6))
+        : Math.ceil(m.max * 2) || 80,
+      costo: m.costo
+    })),
     proveedores[0], 'Abasto inicial del almacen (demo)'
   );
 
   for (const dia of [DIAS_HISTORIA - 30, DIAS_HISTORIA - 60, DIAS_HISTORIA - 90, DIAS_HISTORIA - 120, DIAS_HISTORIA - 150, 25]) {
     const fecha = ts(dia, 9, 15);
-    const seleccion = listaMateriales.filter(() => random() < 0.6);
+    // En el ultimo reabasto se surte parcialmente a algunos materiales escasos:
+    // asi conviven existencias agotadas, criticas y bajas.
+    const seleccion = listaMateriales.filter((m) => (
+      escasos.has(m.id) ? (dia === 25 && random() < 0.6) : random() < 0.6
+    ));
     const lineas = seleccion.map((m) => {
       // A partir de la mitad de la historia algunos costos suben: el precio
       // usado en entregas anteriores NO se modifica (precio historico).
@@ -299,7 +324,10 @@ tx(() => {
         run('INSERT INTO material_costos (material_id, costo, vigente_desde, user_id, motivo) VALUES (?, ?, ?, ?, ?)',
           m.id, costo, fecha, adminId, 'Actualizacion de costo por compra');
       }
-      return { material: m, cantidad: Math.ceil(m.max * (0.6 + random() * 0.6)) || 30, costo };
+      const cantidad = escasos.has(m.id)
+        ? Math.max(1, Math.ceil((m.min || 5) * (0.8 + random() * 0.7)))
+        : Math.ceil(m.max * (0.6 + random() * 0.6)) || 30;
+      return { material: m, cantidad, costo };
     });
     if (lineas.length) registrarEntrada(fecha, lineas, elegir(proveedores), 'Reabastecimiento programado');
   }
@@ -507,7 +535,7 @@ tx(() => {
       let cantidad = it.autorizada;
       // A veces no alcanza el material fisico: se genera entrega parcial.
       const matLinea = listaMateriales.find((m) => m.id === it.materialId);
-      if (cantidad > disponible) cantidad = Math.max(0, porUnidad(disponible, matLinea.unidad_id));
+      if (cantidad > disponible) cantidad = pisoUnidad(disponible, matLinea.unidad_id);
       else if (random() < 0.04) cantidad = porUnidad(cantidad * (0.3 + random() * 0.5), matLinea.unidad_id);
       if (cantidad > it.autorizada) cantidad = it.autorizada;
       if (cantidad > 0) entregas.push({ it, cantidad });
@@ -609,6 +637,25 @@ tx(() => {
         : tipo === 'DANO' ? 'Material danado durante maniobra'
           : 'Ajuste por conteo ciclico de inventario'
     });
+  }
+
+  // Reabasto parcial reciente de algunos materiales escasos: deja existencias
+  // criticas y bajas ademas de las agotadas, para que el semaforo, las alertas
+  // y la sugerencia de compra se aprecien con todos sus estados.
+  const sinExistencia = listaMateriales.filter((m) => escasos.has(m.id) && stock.get(m.id) <= (m.min || 0));
+  // Dos materiales se quedan agotados a proposito: es el caso que dispara las
+  // entregas parciales y la sugerencia de compra.
+  const paraNivelar = sinExistencia.slice(0, Math.max(0, sinExistencia.length - 2));
+  const lineasNivel = [];
+  paraNivelar.forEach((m, i) => {
+    const objetivo = i % 2 === 0
+      ? Math.max(1, Math.floor((m.min || 5) * 0.7))            // quedara CRITICO
+      : Math.max(1, Math.floor((m.reorden || m.min || 8) * 0.9)); // quedara BAJO
+    const falta = porUnidad(objetivo - stock.get(m.id), m.unidad_id);
+    if (falta > 0) lineasNivel.push({ material: m, cantidad: falta, costo: costoVigente.get(m.id) });
+  });
+  if (lineasNivel.length) {
+    registrarEntrada(ts(3, 10, 20), lineasNivel, elegir(proveedores), 'Reabasto parcial urgente');
   }
 
   // Sincroniza el stock final calculado con la tabla de materiales.

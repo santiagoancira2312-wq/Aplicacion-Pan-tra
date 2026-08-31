@@ -752,6 +752,16 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
   .modal-pie .btn { min-width: 120px; }
 }
 
+@media (max-width: 640px) {
+  /* En telefono el buscador global cede espacio al titulo de la vista. */
+  .buscador-global { display: none; }
+  /* Los avisos no tapan la cabecera: aparecen sobre la barra inferior. */
+  #avisos {
+    top: auto; bottom: calc(74px + env(safe-area-inset-bottom));
+    left: 12px; right: 12px; max-width: none;
+  }
+}
+
 @media (max-width: 480px) {
   .contenido { padding: 12px; padding-bottom: 88px; }
   .rejilla { gap: 12px; }

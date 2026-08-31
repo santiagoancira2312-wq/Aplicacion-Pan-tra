@@ -61,7 +61,7 @@ export async function render() {
 
     if (d.por_mes.length) {
       cuerpo.appendChild(tarjeta('Consumo por mes',
-        barras([...d.por_mes].reverse().map((m) => ({ etiqueta: m.periodo.slice(2), valor: m.importe })),
+        barras([...d.por_mes].reverse().map((m) => ({ etiqueta: mesCorto(m.periodo), valor: m.importe })),
           { formato: monedaCorta, etiqueta: 'Consumo mensual de la empresa externa' })));
     }
 
@@ -269,4 +269,10 @@ export async function render() {
       ), null, { sinRelleno: true }
     ));
   }
+}
+
+const MESES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+function mesCorto(periodo) {
+  const [anio, mes] = String(periodo).split('-');
+  return `${MESES[Number(mes) - 1] || mes} ${anio.slice(2)}`;
 }

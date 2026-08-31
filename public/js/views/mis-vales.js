@@ -68,8 +68,8 @@ export async function render() {
               chipEstado(v.estado)
             ),
             h('div', { clase: 'lista-item-sub' },
-              `Trailer ${v.trailer_numero} · ${v.num_lineas} materiales` +
-              (v.num_kits ? ` · ${v.num_kits} kit(s)` : ''))
+              `Trailer ${v.trailer_numero} · ${v.num_lineas} ${v.num_lineas === 1 ? 'material' : 'materiales'}` +
+              (v.num_kits ? ` · ${v.num_kits} ${v.num_kits === 1 ? 'kit' : 'kits'}` : ''))
           ),
           h('div', { clase: 'lista-item-fin' },
             h('div', { clase: 'pequeno silencio', texto: haceRato(v.created_at) }),
