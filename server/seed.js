@@ -46,10 +46,21 @@ const elegir = (arr) => arr[Math.floor(random() * arr.length)];
 const round = (n) => Math.round(n * 1000) / 1000;
 
 const HOY = new Date();
+/**
+ * Marca de tiempo de un dia pasado, en horario de planta.
+ * Nunca devuelve una fecha futura: los registros del demo siempre son historia.
+ */
 const ts = (diasAtras, hora = null, minuto = null) => {
   const d = new Date(HOY.getTime() - diasAtras * 86400000);
   d.setUTCHours(hora == null ? entre(13, 23) : hora, minuto == null ? entre(0, 59) : minuto, entre(0, 59), 0);
+  if (d.getTime() > HOY.getTime()) d.setTime(HOY.getTime() - entre(2, 180) * 60000);
   return d.toISOString().slice(0, 19).replace('T', ' ');
+};
+
+/** Avanza una marca de tiempo sin pasarse del momento actual. */
+const avanzar = (base, minutos) => {
+  const t = Math.min(new Date(base + 'Z').getTime() + minutos * 60000, HOY.getTime() - 60000);
+  return new Date(t).toISOString().slice(0, 19).replace('T', ' ');
 };
 
 const DIAS_HISTORIA = 200;
@@ -457,10 +468,7 @@ tx(() => {
     // Vales recientes que siguen esperando autorizacion.
     if (!antiguo && suerte < 0.18) { pendientes += 1; continue; }
 
-    const autorizado = ts(v.diasAtras, null, null) > v.creado
-      ? ts(v.diasAtras, null, null) : v.creado;
-    const fechaAut = new Date(new Date(v.creado + 'Z').getTime() + entre(8, 240) * 60000)
-      .toISOString().slice(0, 19).replace('T', ' ');
+    const fechaAut = avanzar(v.creado, entre(8, 240));
 
     // Rechazo o solicitud de correccion.
     if (suerte > 0.93) {
@@ -522,10 +530,8 @@ tx(() => {
 
     // Preparacion y entrega fisica.
     const almacenista = elegir(usuarios.almacen);
-    const fechaPrep = new Date(new Date(fechaAut + 'Z').getTime() + entre(10, 180) * 60000)
-      .toISOString().slice(0, 19).replace('T', ' ');
-    const fechaEnt = new Date(new Date(fechaPrep + 'Z').getTime() + entre(5, 120) * 60000)
-      .toISOString().slice(0, 19).replace('T', ' ');
+    const fechaPrep = avanzar(fechaAut, entre(10, 180));
+    const fechaEnt = avanzar(fechaPrep, entre(5, 120));
     run('UPDATE vales SET preparacion_at = ?, preparado_at = ?, preparado_por = ? WHERE id = ?',
       fechaAut, fechaPrep, almacenista, v.valeId);
 
@@ -587,8 +593,7 @@ tx(() => {
 
     // Algunas entregas parciales antiguas se cierran por decision del almacen.
     if (!completa && v.diasAtras > 40 && random() < 0.5) {
-      const fechaCierre = new Date(new Date(fechaEnt + 'Z').getTime() + entre(3, 20) * 86400000)
-        .toISOString().slice(0, 19).replace('T', ' ');
+      const fechaCierre = avanzar(fechaEnt, entre(3, 20) * 1440);
       run(`UPDATE vale_items SET estado_linea = 'CERRADA', motivo_linea = ? WHERE vale_id = ? AND cantidad_autorizada > cantidad_entregada`,
         'Material ya no requerido para este trailer', v.valeId);
       run(`UPDATE vales SET estado = 'CERRADO', cerrado_por = ?, cerrado_at = ?, motivo_cierre = ? WHERE id = ?`,
@@ -597,9 +602,8 @@ tx(() => {
 
     // Devoluciones ocasionales confirmadas por el almacen.
     if (completa && random() < 0.06) {
-      const fechaDev = new Date(new Date(fechaEnt + 'Z').getTime() + entre(1, 10) * 86400000)
-        .toISOString().slice(0, 19).replace('T', ' ');
-      if (fechaDev < ts(0, 23, 59)) {
+      const fechaDev = avanzar(fechaEnt, entre(1, 10) * 1440);
+      if (fechaDev > fechaEnt) {
         const linea = elegir(entregas);
         const cantidad = Math.max(1, Math.floor(linea.cantidad * 0.3));
         if (cantidad > 0 && cantidad <= linea.cantidad) {
