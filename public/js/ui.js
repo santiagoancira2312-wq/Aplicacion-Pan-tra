@@ -251,7 +251,7 @@ export function tabla(columnas, filas, opciones = {}) {
     h('table', { clase: opciones.compacta ? 'tabla-compacta' : '' },
       h('thead', {}, h('tr', {}, columnas.map((c) => h('th', {
         clase: c.num ? 'num' : '', style: c.ancho ? `width:${c.ancho}` : ''
-      }, c.titulo || c)))),
+      }, c.titulo ?? c)))),
       h('tbody', {}, cuerpo)
     )
   );
