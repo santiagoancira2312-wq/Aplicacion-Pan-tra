@@ -137,16 +137,17 @@ Pendientes conocidos (documentados en el README):
 - Para produccion: HTTPS con `SECURE_COOKIES=1`, respaldos, y activar la
   restriccion de red con los rangos reales de la planta.
 
-## Limitacion conocida: subir cambios a GitHub
+## Subir cambios a GitHub
 
-La app de Claude en GitHub tiene permiso de **lectura pero no de escritura**
-sobre este repositorio, asi que Claude **no puede hacer `git push`**. Los
-cambios se suben desde la Mac del usuario con **GitHub Desktop** (Commit ->
-Push origin), o habilitando el permiso de escritura en
-`github.com/settings/installations`.
+Claude **si puede hacer `git push`** sobre este repositorio: tiene permiso de
+escritura. Al terminar un cambio, deja el commit hecho y subelo tu mismo a la
+rama de trabajo `claude/demo-vales-inventario-wx3qqn`.
 
-Cuando termines un cambio en un chat, deja el commit hecho y avisa que falta
-subirlo con GitHub Desktop.
+Trabaja **siempre** en esa rama. No crees ramas nuevas.
+
+Del lado del usuario, para bajar los cambios a la Mac: abrir **GitHub Desktop**
+y darle a **Fetch origin** (y luego **Pull origin** si aparece). Ya no hace
+falta que el usuario haga el commit ni el push.
 
 ## Como trabajar en cada tipo de chat
 
