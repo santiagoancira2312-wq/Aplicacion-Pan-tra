@@ -173,6 +173,10 @@ Alcance, decisiones, como presentarlo a una empresa fabricante de food trucks,
 que falta para produccion, costos y tiempos. Consultas y explicaciones; sin
 cambios de codigo.
 
+**Antes de responder aqui, lee `docs/comercial.md`.** Ahi esta lo ya decidido
+sobre el cliente, el precio, la demostracion en vivo y las decisiones de
+arquitectura, para no volver a discutirlo desde cero.
+
 ## Contexto del usuario
 
 - Trabaja en Mac, con la Terminal y GitHub Desktop; **no es programador**.
@@ -180,5 +184,8 @@ cambios de codigo.
 - El proyecto local vive en `~/Downloads/demo-vales`.
 - El repositorio es `santiagoancira2312-wq/Aplicacion-Pan-tra`, rama de trabajo
   `claude/demo-vales-inventario-wx3qqn`.
-- El objetivo final es presentar el demo a una empresa fabricante de food
-  trucks, asi que la aplicacion debe verse profesional, industrial y terminada.
+- El objetivo final es presentar el demo a **Panamerican Trailers** (planta en
+  Guadalupe, Nuevo Leon; vende en Estados Unidos), asi que la aplicacion debe
+  verse profesional, industrial y terminada. En los documentos comerciales el
+  producto se llama **TRAZA**; la aplicacion sigue sin branding.
+- Todo lo comercial y de presentacion vive en `docs/comercial.md`.
