@@ -254,6 +254,100 @@ Cuidados:
 Es aditivo: si esto falla, todo lo demas sigue funcionando igual. Si se complica,
 dejarlo fuera y avisar.
 
+---
+
+# HALLAZGOS DE PRUEBAS — arreglar antes de la junta
+
+El chat de pruebas reporto 23 hallazgos en `docs/hallazgos.md`, con el numero,
+la reproduccion y el comando exacto de cada uno. **Ese archivo es la fuente;
+aqui solo va el orden y el criterio.**
+
+Verificados a mano antes de escribir esto: el bloqueante (los dos bucles de
+`server/routes/almacen.js` comparan contra el mismo stock inicial) y el
+hallazgo 4 (`/api/dashboard` llama a `requireUser` pero nunca a
+`requirePerm(user, 'dashboard.leer')`). El reporte es confiable, pero **cada
+arreglo debe empezar por reproducir el fallo**, para poder escribir la prueba.
+
+Van en cuatro grupos, en este orden. **Cada grupo es un commit aparte con sus
+pruebas.** Si se acaba el tiempo, se para al terminar un grupo, nunca a la mitad.
+
+## [ ] 10. Grupo 1 — Integridad de inventario (hallazgos 1 y 8)
+
+Lo mas grave y lo mas delicado de tocar, porque es el flujo central.
+
+- **Hallazgo 1 (BLOQUEANTE).** En `POST /api/almacen/vales/:id/entregar`, el
+  bucle que valida corre completo antes del que aplica, asi que dos lineas del
+  mismo material comparan contra la misma existencia y las dos pasan. Llevar la
+  cuenta de lo ya comprometido dentro de la misma entrega, o validar y aplicar
+  material por material dentro de la transaccion. **El stock fisico no puede
+  quedar negativo por ninguna via** (regla 3).
+- **Hallazgo 8.** Validar cantidades y costos en las entradas de almacen:
+  nada de costos negativos ni cantidades absurdas.
+
+Pruebas de regresion obligatorias para los dos. Al terminar, **recorrer el flujo
+completo de la demostracion** (crear, autorizar parcial, entregar parcial con
+firma) para confirmar que no se rompio nada.
+
+## [ ] 11. Grupo 2 — Alcance y permisos (hallazgos 3, 4, 5, 6 y 7)
+
+Son cinco caras del mismo problema y conviene arreglarlos juntos. Importan
+doble: ademas de ser fallas, **contradicen lo que la propuesta le promete al
+cliente** sobre separacion por rol y por empresa.
+
+- **4.** `/api/dashboard` no comprueba `dashboard.leer` ni filtra por empresa.
+- **3.** El buscador global deja ver vales y personal interno a un usuario de la
+  empresa externa.
+- **7.** La exportacion a Excel deja sacar informacion interna a la empresa
+  externa.
+- **5.** Llegan importes en pesos a quien no tiene `costos.leer`.
+- **6.** El consumo por area mezcla las dos empresas y no pide permiso.
+
+Regla al arreglar: **el permiso y el alcance por empresa se comprueban en el
+servidor, en cada endpoint.** Que la interfaz no muestre un boton no es
+proteccion. Revisar de paso los hallazgos 17 y 18, que son de la misma familia.
+
+## [ ] 12. Grupo 3 — Lo que se ve en la demostracion (hallazgos 9, 10, 21 y 23)
+
+- **9.** El vale no aparece en Autorizaciones sin recargar. **Es la tarea 9 de
+  arriba**; si ya se hizo, marcar las dos.
+- **10.** El contador junto a "Autorizaciones" no cuenta vales pendientes.
+- **21.** En telefono se ven tres pestanas y hay seis. El chat de pruebas lo
+  puso como cosmetico; **no lo es para esta junta**: todos van a andar en
+  telefono y la mitad de la navegacion esta escondida.
+- **23.** La pantalla de crear vale mide casi 5,000 px con un kit. El paso que
+  debe tomar menos de un minuto se vuelve un desfile de scroll en telefono.
+
+## [ ] 13. Grupo 4 — El tunel publico (hallazgo 2)
+
+Durante la junta la app sale a internet por un tunel, asi que esto deja de ser
+teorico.
+
+**Hallazgo 2.** La cabecera `X-Forwarded-For` se puede falsificar y con eso se
+salta la restriccion de red y el limite de peticiones (`server/lib/http.js`,
+funcion `clientIp`).
+
+**Cuidado al arreglarlo:** ignorar la cabecera por completo rompe la
+demostracion, porque detras del tunel todo el mundo llegaria con la misma IP y
+el limite de peticiones los tumbaria a todos. La cabecera debe respetarse
+**solo cuando la peticion viene de un proxy de confianza configurado**, y usar
+la direccion del socket en cualquier otro caso.
+
+## Lo que NO se arregla antes de la junta
+
+Hallazgos **11 a 20** (menos el 16, ver abajo) y el **22**. Son molestias que
+nadie va a notar en quince minutos, y cada cambio extra es riesgo.
+
+Dos aclaraciones:
+
+- **Hallazgo 16** (cookie sin `Secure`) no es un error: es la configuracion
+  local sobre `http`. Al publicar por el tunel hay que arrancar con
+  `SECURE_COOKIES=1`. Es operacion, no codigo.
+- **Hallazgo 13** (reemplazar el segundo factor con una sesion abierta) se
+  arregla en cuanto haya tiempo, pero no bloquea la junta: requiere una sesion
+  de administrador ya abierta.
+
+---
+
 ## Fuera del codigo, pero bloquea las tareas 6 y 7
 
 - [ ] Comprar un dominio y montar HTTPS. Sin eso, push y Face ID no se pueden ni
