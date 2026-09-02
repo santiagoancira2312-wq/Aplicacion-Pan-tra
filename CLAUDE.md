@@ -160,6 +160,10 @@ Cambios reales en la aplicacion. Aqui se edita, se prueba y se hace commit.
 Antes de dar por terminado un cambio: correr `npm test`, y cuando sea una
 pantalla, verificar el resultado en la aplicacion, no solo que compile.
 
+**La lista de trabajo esta en `docs/pendientes-codigo.md`**, en orden y con los
+criterios de aceptacion de cada tarea. Al terminar una, marca su casilla en ese
+archivo dentro del mismo commit.
+
 ### Chat de DUDAS — "no se como hacer X" / "me esta fallando Y"
 
 Preguntas de operacion y fallas: la app no abre, un error en la Terminal, como

@@ -1,0 +1,230 @@
+# Pendientes de codigo
+
+> Lista de trabajo para el chat de CODIGO, en orden. Cada tarea trae el porque,
+> los archivos, los criterios de aceptacion y lo que NO hay que tocar.
+> Al terminar una tarea, marca su casilla en este archivo dentro del mismo commit.
+
+## Reglas para todas las tareas
+
+- Rama de trabajo: `claude/demo-vales-inventario-wx3qqn`. No crear ramas nuevas.
+- `npm test` debe pasar completo antes de dar una tarea por terminada.
+- Cuando la tarea toca pantalla, verificarla en la aplicacion corriendo, no solo
+  que compile.
+- Sin dependencias de npm y sin recursos externos: la CSP solo permite el propio
+  origen.
+- Todo en espanol y sin acentos en el codigo.
+- Commits en espanol explicando el porque del cambio, y push a la rama.
+- **Aditivo**: ninguna tarea nueva debe poder romper el flujo de vales ni el
+  inventario. Si la funcion nueva falla, la app tiene que seguir funcionando
+  igual que hoy.
+- Si una tarea se complica mas de lo previsto, parar y avisar antes de seguir.
+  Vale mas dejarla fuera que arriesgar la demostracion.
+
+---
+
+# ANTES DE LA PRESENTACION
+
+## [ ] 1. El almacen tambien queda restringido a la red de la planta
+
+**Obligatorio.** El anexo que se le entrega al cliente ya afirma este
+comportamiento, asi que el codigo tiene que decir lo mismo.
+
+Hoy, en `server/routes/auth.js`, la restriccion solo aplica a `TRABAJADOR`:
+
+```js
+if (user.rol === 'TRABAJADOR' && !redAutorizada(ctx.ip)) { ... }
+```
+
+Debe aplicar tambien a `ALMACEN`: el material se entrega fisicamente en la
+planta, no tiene sentido entregar desde fuera. `SUPERVISOR` se queda como esta
+(autoriza desde donde sea) y `DIRECCION` / `ADMIN` tambien, que entran con
+correo, contrasena y 2FA.
+
+**Prueba de regresion** en `test/flujo.test.js`: con la restriccion de red
+activa, el login con PIN de un usuario `ALMACEN` desde una IP fuera de las redes
+permitidas debe ser rechazado; desde dentro debe pasar.
+
+Aviso para no perder tiempo: `redAutorizada()` en `server/lib/net.js` devuelve
+`true` para `::1`, y las redes permitidas por defecto incluyen `127.0.0.0/8`.
+Una prueba contra localhost pasaria siempre. Hay que dejar `redes_permitidas` en
+un rango que NO incluya localhost y restaurar el valor al terminar.
+
+## [ ] 2. No mostrar disponibles en negativo
+
+Cuando hay mas autorizado que existencias, el disponible queda negativo y en
+pantalla se lee "-127". Es correcto, pero parece un error y en la demostracion
+invita a una pregunta incomoda.
+
+Cambiar **solo la presentacion** en:
+
+- `public/js/views/inventario.js:82`
+- `public/js/views/panel.js:113`
+- `public/js/views/material.js:50`
+
+Cuando el disponible sea negativo, mostrar `0` y junto a el cuanto falta
+(del estilo "0" con una etiqueta "faltan 127"). Resolverlo con el sistema visual
+que ya existe en `public/js/ui.js` y `public/css/app.css`.
+
+**El dato NO cambia.** La regla de negocio 3 dice que el disponible si puede ser
+negativo (el fisico nunca). No tocar la vista `v_inventario`, ni las consultas,
+ni ningun calculo del servidor.
+
+## [ ] 3. Notificacion en vivo dentro de la aplicacion
+
+Hoy las notificaciones se guardan bien (tabla `notificaciones`,
+`server/lib/notify.js`, endpoints en `server/routes/auth.js:209`) pero el usuario
+solo las ve si abre o recarga la app. Se quiere que aparezcan solas.
+
+Esta tarea es la version **sin riesgo** de las notificaciones: no necesita HTTPS
+ni dominio ni criptografia, y da casi el mismo efecto en una demostracion en
+vivo, donde todos tienen la app abierta.
+
+Que la aplicacion consulte `/api/notificaciones` periodicamente mientras haya
+sesion abierta y, cuando llegue una nueva:
+
+- actualice el contador de pendientes
+- muestre un aviso visible en pantalla, con el sistema visual existente
+- haga un sonido corto y vibracion si el dispositivo lo soporta
+
+Criterios:
+
+- Cada 10 segundos. Detener la consulta cuando `document.hidden` sea verdadero y
+  reanudar al volver, para no gastar bateria.
+- Si la peticion falla: no mostrar error, no romper nada, reintentar despues.
+- Verificar con dos navegadores abiertos: crear un vale en uno y ver que el aviso
+  aparece solo en el otro, sin recargar.
+
+---
+
+# DESPUES DE LA PRESENTACION
+
+Estas tareas suben el valor del producto. **No empezarlas antes de la junta:**
+la app esta terminada y probada, y una funcion nueva agrega riesgo, no valor.
+
+## [ ] 4. Fotos de materiales
+
+El campo `foto` ya existe en la tabla `materiales` (`server/schema.sql:142`) y ya
+se lee en la vista de inventario. Falta el almacenamiento de archivos.
+
+- Subida desde la pantalla del catalogo.
+- Guardado en disco junto a la base de datos (carpeta de datos), con la ruta en
+  el campo que ya existe.
+- Mostrarla en la pantalla del material y **en la lista de surtido del almacen**,
+  que es donde de verdad sirve: el almacenista ve la foto y surte lo correcto.
+- Limitar tipo y tamano de archivo, y validar en el servidor, no solo en el
+  navegador.
+
+Es la funcion de mas valor por hora de trabajo y la unica de esta seccion que no
+depende de HTTPS.
+
+## [ ] 5. Sesiones largas en dispositivos de confianza
+
+Hoy la sesion con contrasena dura 8 horas (`SESSION_MINUTES_PASSWORD`). Para
+direccion y gerencia en su telefono personal, permitir marcar el dispositivo como
+de confianza y extender la sesion a 30 dias. La tabla `sessions` ya guarda
+dispositivo e IP.
+
+- Configurable desde la pantalla de Configuracion.
+- **No aplica a sesiones con PIN**: las iPads de planta son compartidas y su
+  sesion corta es deliberada.
+- El usuario debe poder ver y revocar sus dispositivos de confianza desde Perfil.
+
+Esto resuelve la mayor parte de lo que la gente pide cuando dice "Face ID", por
+mucho menos trabajo que la tarea 7. Hacer esta primero y despues evaluar si la 7
+todavia hace falta.
+
+## [ ] 6. Notificaciones push reales
+
+**Requiere HTTPS con dominio real.** No se puede probar sobre `http://` en la red
+local. En iPhone, ademas, solo llegan si la app esta anclada a la pantalla de
+inicio: es regla de Apple, no un error del codigo.
+
+Es la pieza mas delicada del proyecto: lleva firma de tokens, cifrado de cada
+mensaje segun el estandar de push, y dialogo con los servidores de Apple y
+Google, que devuelven errores poco descriptivos. Todo con `node:crypto`, sin
+dependencias.
+
+Que falta:
+
+- Escuchar los eventos `push` y `notificationclick` en `public/sw.js`, que hoy
+  solo maneja cache.
+- Tabla de suscripciones: `user_id`, endpoint, llaves, nombre del dispositivo,
+  fecha de alta y de ultimo uso.
+- Llaves VAPID y el envio desde `server/lib/notify.js`, sin cambiar la firma de
+  `notificar()` para no tocar quien ya la usa.
+
+**Tres cosas que se olvidan y hay que construir:**
+
+1. **Alta del dispositivo.** Crear al usuario NO es suficiente: la persona tiene
+   que abrir la app en su telefono, iniciar sesion y aceptar el permiso. Solo en
+   ese momento se crea el vinculo telefono-cuenta.
+2. **Saber quien falta.** Una pantalla de administracion que muestre que usuarios
+   tienen dispositivo dado de alta y cuales no. Sin eso, un supervisor sin dar de
+   alta simplemente no recibe nada y **nadie se entera**: los vales se quedan
+   esperando y el trabajador parado, sin ningun error visible.
+3. **Limpiar buzones muertos.** Cuando alguien cambia de telefono, el servicio de
+   push responde que el destino ya no existe. Hay que borrar esa suscripcion y
+   pedir alta del nuevo dispositivo.
+
+Reglas:
+
+- En la pantalla de bloqueo **no** deben ir costos ni proveedores. Basta con
+  "Vale PT-2026-000123 espera su autorizacion".
+- **Nunca activarlas en las iPads compartidas de planta**: el buzon queda ligado a
+  quien lo dio de alta y las notificaciones llegarian a la persona equivocada.
+  Push solo en dispositivos personales.
+- Si el permiso se deniega, el navegador no vuelve a preguntar. La interfaz debe
+  explicar como rehabilitarlo desde los ajustes del telefono.
+
+## [ ] 7. Face ID / huella (passkeys, WebAuthn)
+
+Va al final: es comodidad, no un bloqueo. Hacer antes la tarea 5.
+
+El telefono guarda una llave en su chip de seguridad ligada a la cuenta. Face ID
+la desbloquea localmente y se firma un reto del servidor. **La aplicacion nunca ve
+la cara ni recibe datos biometricos.**
+
+Alcance: solo para usuarios que entran con correo y contrasena (`DIRECCION`,
+`ADMIN`, gerencia) en su dispositivo personal. **Nunca** para los roles con PIN.
+Debe convivir con la contrasena, no sustituirla: si se pierde el telefono, se
+entra con contrasena y 2FA.
+
+Que construir, sin dependencias:
+
+- Tabla de credenciales: `user_id`, credential id, llave publica, contador de
+  firmas, nombre del dispositivo, alta y ultimo uso. Varias por usuario. Se dan
+  de baja desde Perfil.
+- **Alta:** reto aleatorio guardado en el servidor, de un solo uso y con
+  caducidad corta. Aceptar attestation `none`. Hace falta un decodificador CBOR
+  minimo para sacar la llave publica del `attestationObject` y convertir la llave
+  COSE a un formato que `node:crypto` pueda verificar. Solo ES256 (algoritmo -7);
+  cualquier otro se rechaza con mensaje claro.
+- **Entrada:** verificar la firma sobre `authenticatorData` + SHA-256 del
+  `clientDataJSON`; que el reto sea el emitido y no usado; que `origin` y `rpId`
+  sean los esperados; que las banderas de presencia y verificacion esten puestas;
+  y que el contador de firmas no retroceda.
+- Interfaz: boton "Entrar con Face ID" que solo aparezca si el navegador lo
+  soporta, y alta/baja de dispositivos en Perfil.
+- Auditoria: registrar alta de credencial, baja y cada entrada por esta via.
+
+Donde se prueba: WebAuthn funciona en `localhost`, asi que se desarrolla y prueba
+en la Mac con Touch ID. En el iPhone por la red local no va a funcionar hasta que
+haya HTTPS con dominio.
+
+Si el decodificador CBOR se va de las manos, parar y avisar: se puede vivir con
+la tarea 5.
+
+## [ ] 8. Escaneo de codigo de barras o QR en el surtido
+
+Idea anotada, sin especificar todavia. El almacenista apunta la camara al rack en
+vez de buscar en una lista. Sube la velocidad del surtido y quita errores de
+captura. Requiere HTTPS (acceso a camara) y decidir antes como se etiquetan los
+racks.
+
+---
+
+## Fuera del codigo, pero bloquea las tareas 6 y 7
+
+- [ ] Comprar un dominio y montar HTTPS. Sin eso, push y Face ID no se pueden ni
+      probar. Tambien habilita anclar la app como aplicacion en el telefono y da
+      un correo con dominio propio para la propuesta comercial.
