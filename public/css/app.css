@@ -691,6 +691,7 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 .notificacion-titulo { font-weight: 650; font-size: 14px; }
 .notificacion-cuerpo { font-size: 13px; color: var(--texto-2); margin-top: 2px; }
 .notificacion-fecha { font-size: 11.5px; color: var(--texto-3); margin-top: 4px; }
+.campana-envoltura { position: relative; }
 .campana { position: relative; }
 .campana-punto {
   position: absolute; top: 4px; right: 4px; width: 9px; height: 9px;
@@ -765,6 +766,15 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
   #avisos {
     top: auto; bottom: calc(74px + env(safe-area-inset-bottom));
     left: 12px; right: 12px; max-width: none;
+  }
+  /* Colgado de la campana el panel se sale por la izquierda de la pantalla.
+     En telefono se ancla a la cabecera y ocupa todo el ancho: al quitarle la
+     posicion a la envoltura, el panel se mide contra la cabecera, asi que
+     queda siempre justo debajo aunque el titulo ocupe dos lineas. */
+  .campana-envoltura { position: static; }
+  .panel-notificaciones {
+    left: 12px; right: 12px; width: auto;
+    max-height: calc(100dvh - 170px);
   }
 }
 

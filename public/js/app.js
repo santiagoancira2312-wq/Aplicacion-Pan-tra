@@ -175,7 +175,11 @@ function construirShell() {
     h('nav', { clase: 'barra-inferior', id: 'barra-inferior' })
   );
 
-  refs = { shell, contenido, titulo: titulo.firstChild, subtitulo: titulo.lastChild };
+  // campana() ya dejo su punto en refs unas lineas arriba: se conserva, porque
+  // si no el aviso de pendientes queda apagado para siempre.
+  refs = {
+    shell, contenido, titulo: titulo.firstChild, subtitulo: titulo.lastChild, punto: refs.punto
+  };
   return shell;
 }
 
@@ -292,7 +296,7 @@ function campana() {
   });
 
   refs.punto = punto;
-  return h('div', { clase: 'campana-envoltura', style: 'position:relative' }, boton, panel);
+  return h('div', { clase: 'campana-envoltura' }, boton, panel);
 }
 
 async function pintarNotificaciones(panel) {
