@@ -345,6 +345,93 @@ export async function actualizarPendientes() {
 }
 
 // --------------------------------------------------------------------------
+// Notificaciones en vivo
+//
+// La aplicacion pregunta sola cada pocos segundos mientras la pestana esta a
+// la vista, para que el supervisor se entere de un vale nuevo sin recargar.
+// Es aditivo: si la consulta falla no se muestra ningun error y todo lo demas
+// sigue funcionando igual que antes.
+// --------------------------------------------------------------------------
+const MS_ENTRE_CONSULTAS = 10000;
+let temporizadorNotificaciones = null;
+// id mas alto ya conocido. En null todavia no hay linea base: la primera
+// consulta solo la establece, para no anunciar el historial al entrar.
+let ultimaNotificacionVista = null;
+let audio = null;
+
+/** Tono corto generado en el navegador: no hay archivos de sonido que cargar. */
+function sonarAviso() {
+  try {
+    const Contexto = window.AudioContext || window.webkitAudioContext;
+    if (!Contexto) return;
+    audio = audio || new Contexto();
+    if (audio.state === 'suspended') audio.resume().catch(() => {});
+    const t0 = audio.currentTime;
+    const oscilador = audio.createOscillator();
+    const volumen = audio.createGain();
+    oscilador.type = 'sine';
+    oscilador.frequency.setValueAtTime(880, t0);
+    oscilador.frequency.setValueAtTime(1175, t0 + 0.09);
+    volumen.gain.setValueAtTime(0.0001, t0);
+    volumen.gain.exponentialRampToValueAtTime(0.12, t0 + 0.02);
+    volumen.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.26);
+    oscilador.connect(volumen).connect(audio.destination);
+    oscilador.start(t0);
+    oscilador.stop(t0 + 0.28);
+  } catch { /* el sonido es un extra y nunca debe romper la aplicacion */ }
+}
+
+function vibrarAviso() {
+  try { if (navigator.vibrate) navigator.vibrate([90, 60, 90]); } catch { /* opcional */ }
+}
+
+async function consultarNotificaciones() {
+  if (!estado.user) return;
+  try {
+    const { notificaciones, pendientes } = await api.get('/api/notificaciones');
+    estado.notificaciones = notificaciones;
+    estado.pendientes = pendientes;
+    if (refs.punto) refs.punto.classList.toggle('oculto', !pendientes);
+    pintarMenu();
+
+    const maximo = notificaciones.reduce((may, n) => Math.max(may, n.id), 0);
+    if (ultimaNotificacionVista === null) { ultimaNotificacionVista = maximo; return; }
+
+    const nuevas = notificaciones.filter((n) => n.id > ultimaNotificacionVista);
+    if (!nuevas.length) return;
+    ultimaNotificacionVista = maximo;
+
+    // Llegan de la mas reciente a la mas vieja: se muestran al reves para que
+    // la ultima que aparece sea la mas nueva. Como mucho tres, para no tapar
+    // la pantalla si se acumularon varias.
+    for (const n of nuevas.slice(0, 3).reverse()) {
+      aviso(n.cuerpo ? `${n.titulo}: ${n.cuerpo}` : n.titulo, 'ok');
+    }
+    sonarAviso();
+    vibrarAviso();
+  } catch { /* sin conexion o sesion caida: se reintenta en la siguiente vuelta */ }
+}
+
+export function iniciarNotificacionesEnVivo() {
+  detenerNotificacionesEnVivo();
+  if (!estado.user || document.hidden) return;
+  consultarNotificaciones();
+  temporizadorNotificaciones = setInterval(consultarNotificaciones, MS_ENTRE_CONSULTAS);
+}
+
+export function detenerNotificacionesEnVivo() {
+  clearInterval(temporizadorNotificaciones);
+  temporizadorNotificaciones = null;
+}
+
+// Con la pestana en segundo plano no se consulta nada, para no gastar bateria
+// en los iPads de planta. Al volver se consulta de inmediato.
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) detenerNotificacionesEnVivo();
+  else iniciarNotificacionesEnVivo();
+});
+
+// --------------------------------------------------------------------------
 // Cierre de sesion e inactividad
 // --------------------------------------------------------------------------
 let temporizadorInactividad = null;
@@ -367,6 +454,8 @@ export async function cerrarSesion(silencioso = false) {
   try { await api.post('/api/auth/logout'); } catch { /* la cookie se limpia igual */ }
   estado.user = null;
   estado.notificaciones = [];
+  detenerNotificacionesEnVivo();
+  ultimaNotificacionVista = null;
   clearTimeout(temporizadorInactividad);
   ir('/acceso', { reemplazar: true });
   if (!silencioso) aviso('Sesion cerrada');
@@ -375,6 +464,8 @@ export async function cerrarSesion(silencioso = false) {
 alPerderSesion(() => {
   if (!estado.user) return;
   estado.user = null;
+  detenerNotificacionesEnVivo();
+  ultimaNotificacionVista = null;
   ir('/acceso', { reemplazar: true });
   avisoError('Su sesion expiro. Ingrese nuevamente.');
 });
@@ -455,7 +546,8 @@ async function entrar(user) {
   estado.user = user;
   const destino = INICIO_POR_ROL[user.rol] || '/mis-vales';
   ir(destino, { reemplazar: true });
-  actualizarPendientes();
+  ultimaNotificacionVista = null;
+  iniciarNotificacionesEnVivo();
 }
 
 // --------------------------------------------------------------------------
@@ -469,10 +561,7 @@ async function arrancar() {
   } catch { estado.user = null; }
 
   iniciar(navegar);
-  if (estado.user) {
-    setInterval(actualizarPendientes, 45000);
-    setTimeout(actualizarPendientes, 800);
-  }
+  if (estado.user) iniciarNotificacionesEnVivo();
 
   window.addEventListener('online', () => aviso('Conexion restablecida', 'ok'));
   window.addEventListener('offline', () => avisoError('SIN CONEXION. No se podran registrar operaciones.'));

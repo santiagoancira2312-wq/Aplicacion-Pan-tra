@@ -69,7 +69,7 @@ que ya existe en `public/js/ui.js` y `public/css/app.css`.
 negativo (el fisico nunca). No tocar la vista `v_inventario`, ni las consultas,
 ni ningun calculo del servidor.
 
-## [ ] 3. Notificacion en vivo dentro de la aplicacion
+## [x] 3. Notificacion en vivo dentro de la aplicacion
 
 Hoy las notificaciones se guardan bien (tabla `notificaciones`,
 `server/lib/notify.js`, endpoints en `server/routes/auth.js:209`) pero el usuario
