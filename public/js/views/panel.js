@@ -5,7 +5,7 @@
 import { api } from '../api.js';
 import {
   h, vaciar, tarjeta, kpi, chip, chipEstado, numero, moneda, monedaCorta,
-  fechaHora, haceRato, cargando, tabla, semaforo, vacio
+  fechaHora, haceRato, cargando, tabla, semaforo, vacio, disponible
 } from '../ui.js';
 import { barras, linea, barrasHorizontales, dona, leyenda, PALETA } from '../graficas.js';
 import { tituloVista, puede } from '../app.js';
@@ -110,7 +110,7 @@ export async function render() {
           h('td', { clase: 'mono pequeno', texto: m.sku }),
           h('td', { clase: 'negrita', texto: m.nombre }),
           h('td', { clase: 'num' }, `${numero(m.stock_fisico)} ${m.unidad}`),
-          h('td', { clase: 'num', texto: numero(m.disponible) }),
+          h('td', { clase: 'num' }, disponible(m.disponible, m.unidad)),
           h('td', { clase: 'num silencio', texto: numero(m.stock_min) }),
           h('td', { clase: 'num silencio', texto: numero(m.punto_reorden) })
         )), { compacta: true }

@@ -370,6 +370,12 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 .chip.acento { background: var(--acento-suave); color: var(--acento-fuerte); }
 .chip-punto { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
 
+/* Disponible negativo: se muestra 0 y cuanto falta, sin cambiar el dato. */
+.disponible-falta {
+  display: inline-flex; gap: 6px; align-items: center;
+  flex-wrap: wrap; justify-content: flex-end;
+}
+
 /* Semaforo de inventario */
 .semaforo { display: inline-flex; align-items: center; gap: 7px; font-weight: 650; font-size: 13px; }
 .semaforo::before { content: ''; width: 10px; height: 10px; border-radius: 50%; }

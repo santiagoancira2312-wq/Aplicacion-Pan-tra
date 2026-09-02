@@ -2,7 +2,7 @@
 import { api, qs } from '../api.js';
 import {
   h, vaciar, tarjeta, kpi, numero, moneda, monedaCorta, semaforo, cargando,
-  vacio, tabla, campo, selector, chip, modal, avisoOk, avisoError
+  vacio, tabla, campo, selector, chip, modal, avisoOk, avisoError, disponible
 } from '../ui.js';
 import { icono } from '../iconos.js';
 import { tituloVista, puede } from '../app.js';
@@ -79,7 +79,7 @@ export async function render() {
             h('td', { clase: 'pequeno silencio', texto: m.categoria || '—' }),
             h('td', { clase: 'num negrita' }, `${numero(m.stock_fisico)} ${m.unidad}`),
             h('td', { clase: 'num silencio', texto: numero(m.comprometido) }),
-            h('td', { clase: 'num negrita', texto: numero(m.disponible) }),
+            h('td', { clase: 'num negrita' }, disponible(m.disponible, m.unidad)),
             h('td', { clase: 'num silencio', texto: numero(m.stock_min) }),
             h('td', { clase: 'num silencio', texto: numero(m.punto_reorden) }),
             h('td', { clase: 'mono pequeno', texto: m.ubicacion || '—' }),

@@ -231,6 +231,24 @@ export function kpi(etiqueta, valor, nota = '', clase = '') {
   );
 }
 
+/**
+ * El disponible puede quedar negativo cuando hay mas autorizado que existencias.
+ * El dato NO cambia (regla 3, el fisico nunca es negativo pero el disponible si):
+ * solo la presentacion, porque un "-127" en pantalla se lee como un error del
+ * sistema en vez de como lo que es, faltante por comprar.
+ */
+export const faltante = (valor, unidad = '') =>
+  `Faltan ${numero(Math.abs(Number(valor) || 0))}${unidad ? ` ${unidad}` : ''}`;
+
+export function disponible(valor, unidad = '') {
+  const v = Number(valor) || 0;
+  if (v >= 0) return h('span', { texto: numero(v) });
+  return h('span', { clase: 'disponible-falta' },
+    h('span', { texto: '0' }),
+    chip(faltante(v, unidad), 'ambar')
+  );
+}
+
 export function tarjeta(titulo, contenido, acciones = null, opciones = {}) {
   return h('div', { clase: 'tarjeta' },
     titulo ? h('div', { clase: 'tarjeta-cabecera' },

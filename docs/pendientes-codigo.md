@@ -49,7 +49,7 @@ Aviso para no perder tiempo: `redAutorizada()` en `server/lib/net.js` devuelve
 Una prueba contra localhost pasaria siempre. Hay que dejar `redes_permitidas` en
 un rango que NO incluya localhost y restaurar el valor al terminar.
 
-## [ ] 2. No mostrar disponibles en negativo
+## [x] 2. No mostrar disponibles en negativo
 
 Cuando hay mas autorizado que existencias, el disponible queda negativo y en
 pantalla se lee "-127". Es correcto, pero parece un error y en la demostracion

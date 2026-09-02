@@ -2,7 +2,7 @@
 import { api } from '../api.js';
 import {
   h, vaciar, tarjeta, kpi, chip, numero, moneda, fechaHora, semaforo,
-  cargando, tabla, avisoOk
+  cargando, tabla, avisoOk, faltante
 } from '../ui.js';
 import { tituloVista, puede } from '../app.js';
 import { formularioMaterial, formularioAjuste } from './inventario.js';
@@ -47,7 +47,9 @@ export async function render({ params }) {
         h('div', { clase: 'rejilla c4' },
           kpi('Stock fisico', `${numero(material.stock_fisico)} ${material.unidad}`),
           kpi('Comprometido', numero(material.comprometido), 'Autorizado sin entregar', 'ambar'),
-          kpi('Disponible', numero(material.disponible), 'Fisico menos comprometido', 'verde'),
+          material.disponible < 0
+            ? kpi('Disponible', '0', faltante(material.disponible, material.unidad), 'ambar')
+            : kpi('Disponible', numero(material.disponible), 'Fisico menos comprometido', 'verde'),
           verCostos ? kpi('Valor', moneda(material.valor), `${moneda(material.costo)} por ${material.unidad}`, 'acento') : null,
           kpi('Minimo', numero(material.stock_min)),
           kpi('Maximo', numero(material.stock_max)),
