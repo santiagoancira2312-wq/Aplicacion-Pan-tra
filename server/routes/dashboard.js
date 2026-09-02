@@ -1,6 +1,7 @@
 import { all, get } from '../db.js';
+import { forbidden } from '../lib/http.js';
 import { requireUser } from './auth.js';
-import { can, puedeVerCostos } from '../lib/rbac.js';
+import { can, requirePerm, puedeVerCostos } from '../lib/rbac.js';
 
 const salidasNetas = `SUM(CASE WHEN mv.tipo = 'SALIDA' THEN mv.importe ELSE -mv.importe END)`;
 const FILTRO_CONSUMO = `mv.tipo IN ('SALIDA','DEVOLUCION')`;
@@ -11,6 +12,11 @@ export default function register(r) {
   // -------------------------------------------------------------------------
   r.get('/api/dashboard', (ctx) => {
     const user = requireUser(ctx);
+    // Que el menu no muestre el panel no es proteccion: se comprueba aqui.
+    requirePerm(user, 'dashboard.leer');
+    // El panel resume la operacion completa de la planta y no existe una
+    // version por empresa, asi que un usuario de la empresa externa no lo ve.
+    if (user.empresa === 'REYNA') throw forbidden('El panel ejecutivo resume la operacion interna');
     const verCostos = puedeVerCostos(user);
     const hoy = new Date().toISOString().slice(0, 10);
     const mes = hoy.slice(0, 7);

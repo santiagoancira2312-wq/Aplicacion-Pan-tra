@@ -445,6 +445,86 @@ test('una entrada de almacen rechaza costos negativos y cantidades absurdas', as
   assert.equal(final.stock_fisico, antes.stock_fisico + 5);
 });
 
+test('el alcance por rol y por empresa se comprueba en el servidor', async () => {
+  // Hallazgos 3, 4, 5, 6, 7, 17 y 18. Que la interfaz no muestre un boton no es
+  // proteccion: cada endpoint tiene que comprobar permiso y empresa.
+  await api('POST', '/api/auth/login-pin', { employee_id: 'RSU-01', pin: '400010' }, 'reynasup');
+  await api('POST', '/api/auth/login-pin', { employee_id: 'EMP-001', pin: '300001' }, 'emp');
+  await api('POST', '/api/auth/login-pin', { employee_id: 'SUP-01', pin: '100001' }, 'sup');
+
+  // 4. El panel ejecutivo pide permiso y no cruza empresas.
+  const panelTrabajador = await api('GET', '/api/dashboard', undefined, 'emp');
+  assert.equal(panelTrabajador.status, 403, 'un trabajador no tiene panel ejecutivo');
+  const panelExterno = await api('GET', '/api/dashboard', undefined, 'reynasup');
+  if (panelExterno.status === 200) {
+    for (const a of panelExterno.datos.actividad || []) {
+      assert.equal(a.empresa, 'REYNA', 'el panel de la empresa externa no muestra vales internos');
+    }
+  }
+
+  // 3. El buscador global respeta el alcance.
+  const buscarVales = await api('GET', '/api/buscar?q=PT-2026', undefined, 'reynasup');
+  assert.equal(buscarVales.status, 200);
+  const suyos = new Set((await api('GET', '/api/vales?empresa=REYNA&limit=500', undefined, 'admin'))
+    .datos.vales.map((v) => v.folio));
+  const encontrados = buscarVales.datos.resultados.filter((x) => x.tipo === 'VALE');
+  assert.ok(encontrados.length, 'el buscador debe encontrar sus propios vales');
+  for (const v of encontrados) {
+    assert.ok(suyos.has(v.titulo), `${v.titulo} no es de la empresa externa y no deberia aparecer`);
+  }
+  const buscarPersona = await api('GET', '/api/buscar?q=Kevin', undefined, 'reynasup');
+  assert.equal(buscarPersona.datos.resultados.filter((x) => x.tipo === 'PERSONA').length, 0,
+    'la empresa externa no debe ver personal interno');
+
+  // 5. Sin permiso de costos no llegan importes, ni escondidos en el JSON.
+  const kits = await api('GET', '/api/analitica/kits', undefined, 'sup');
+  assert.equal(kits.status, 200);
+  for (const k of kits.datos.kits) {
+    for (const campo of ['costo_estandar', 'costo_real', 'variacion_costo']) {
+      assert.equal(k[campo], undefined, `el supervisor no debe recibir ${campo}`);
+    }
+  }
+
+  // 6. El consumo por area pide permiso y filtra por empresa.
+  assert.equal((await api('GET', '/api/analitica/area', undefined, 'emp')).status, 403,
+    'el consumo por area pide permiso');
+  const areaExterna = await api('GET', '/api/analitica/area', undefined, 'reynasup');
+  assert.equal(areaExterna.status, 200);
+  if (areaExterna.datos.area_id) {
+    const propios = await api('GET',
+      `/api/vales?area_id=${areaExterna.datos.area_id}&empresa=REYNA&limit=1`, undefined, 'admin');
+    const todos = await api('GET',
+      `/api/vales?area_id=${areaExterna.datos.area_id}&limit=1`, undefined, 'admin');
+    assert.ok(propios.datos.total < todos.datos.total, 'el area debe tener vales de las dos empresas');
+    assert.equal(areaExterna.datos.vales.total, propios.datos.total,
+      'el consumo por area solo cuenta los vales de su empresa');
+  }
+
+  // 7. La exportacion no deja sacar informacion de la otra empresa.
+  const consumoTrailer = await fetch(`${BASE}/api/exportar/consumo_trailer`, {
+    headers: { Cookie: cookies.get('reynasup') }
+  });
+  assert.equal(consumoTrailer.status, 403,
+    'la empresa externa no exporta el consumo de los trailers internos');
+  const listaReportes = await api('GET', '/api/exportar', undefined, 'reynasup');
+  for (const reporte of listaReportes.datos.reportes) {
+    assert.ok(['movimientos', 'detalle_vales', 'trabajadores', 'consumo_reyna'].includes(reporte),
+      `el reporte ${reporte} no deberia ofrecerse a la empresa externa`);
+  }
+
+  // 17. Los catalogos con datos de proveedores piden permiso.
+  assert.equal((await api('GET', '/api/proveedores', undefined, 'emp')).status, 403,
+    'un trabajador no lista proveedores con su contacto');
+
+  // 18. La lista de surtido comprueba alcance, no se arma con usuario nulo.
+  const cola = await api('GET', '/api/almacen/cola', undefined, 'almacen');
+  if (cola.status === 200 && (cola.datos.nuevos || []).length) {
+    const ajeno = cola.datos.nuevos[0].id;
+    const prep = await api('GET', `/api/almacen/vales/${ajeno}/preparacion`, undefined, 'reynasup');
+    assert.equal(prep.status, 403, 'la empresa externa no arma la lista de surtido de un vale interno');
+  }
+});
+
 test('la exportacion a Excel entrega CSV', async () => {
   const res = await fetch(`${BASE}/api/exportar/inventario`, { headers: { Cookie: cookies.get('admin') } });
   assert.equal(res.status, 200);

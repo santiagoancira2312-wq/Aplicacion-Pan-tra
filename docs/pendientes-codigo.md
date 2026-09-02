@@ -288,7 +288,7 @@ Pruebas de regresion obligatorias para los dos. Al terminar, **recorrer el flujo
 completo de la demostracion** (crear, autorizar parcial, entregar parcial con
 firma) para confirmar que no se rompio nada.
 
-## [ ] 11. Grupo 2 — Alcance y permisos (hallazgos 3, 4, 5, 6 y 7)
+## [x] 11. Grupo 2 — Alcance y permisos (hallazgos 3, 4, 5, 6 y 7)
 
 Son cinco caras del mismo problema y conviene arreglarlos juntos. Importan
 doble: ademas de ser fallas, **contradicen lo que la propuesta le promete al

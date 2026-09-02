@@ -1,7 +1,7 @@
 import { all, get, run, tx } from '../db.js';
 import { badRequest, notFound, conflict } from '../lib/http.js';
 import { requireUser } from './auth.js';
-import { requirePerm, puedeVerCostos, can } from '../lib/rbac.js';
+import { requirePerm, puedeVerCostos, can, alcanceVales } from '../lib/rbac.js';
 import { audit, diff } from '../lib/audit.js';
 import { sentenciaActualizacion } from '../lib/sql.js';
 
@@ -158,21 +158,23 @@ export default function register(r) {
     return {
       unidades: all('SELECT * FROM unidades WHERE activo = 1 ORDER BY codigo'),
       categorias: all('SELECT * FROM categorias WHERE activo = 1 ORDER BY nombre'),
-      proveedores: can(user, 'catalogo.leer') ? all('SELECT * FROM proveedores WHERE activo = 1 ORDER BY nombre') : [],
+      proveedores: can(user, 'inventario.leer') ? all('SELECT * FROM proveedores WHERE activo = 1 ORDER BY nombre') : [],
       areas: all('SELECT * FROM areas WHERE activo = 1 ORDER BY nombre'),
       trailers: all(`SELECT * FROM trailers WHERE activo = 1 AND estado IN ('PLANEADO','EN_PROCESO') ORDER BY numero`),
       motivos_rechazo: all('SELECT * FROM motivos_rechazo WHERE activo = 1 ORDER BY orden, id')
     };
   });
 
-  for (const [ruta, tabla, campos] of [
-    ['unidades', 'unidades', ['codigo', 'nombre', 'decimales', 'activo']],
-    ['categorias', 'categorias', ['nombre', 'parent_id', 'activo']],
-    ['proveedores', 'proveedores', ['nombre', 'contacto', 'telefono', 'email', 'lead_time_dias', 'activo']],
-    ['areas', 'areas', ['codigo', 'nombre', 'descripcion', 'activo']]
+  for (const [ruta, tabla, campos, permisoLectura] of [
+    ['unidades', 'unidades', ['codigo', 'nombre', 'decimales', 'activo'], 'catalogo.leer'],
+    ['categorias', 'categorias', ['nombre', 'parent_id', 'activo'], 'catalogo.leer'],
+    // Proveedores lleva contacto, telefono y correo: no es catalogo de planta.
+    ['proveedores', 'proveedores', ['nombre', 'contacto', 'telefono', 'email', 'lead_time_dias', 'activo'], 'inventario.leer'],
+    ['areas', 'areas', ['codigo', 'nombre', 'descripcion', 'activo'], 'catalogo.leer']
   ]) {
     r.get(`/api/${ruta}`, (ctx) => {
-      requireUser(ctx);
+      const user = requireUser(ctx);
+      requirePerm(user, permisoLectura);
       return { [ruta]: all(`SELECT * FROM ${tabla} ORDER BY id`) };
     });
 
@@ -274,12 +276,15 @@ export default function register(r) {
     const like = `%${q}%`;
     const res = [];
 
+    // El buscador usa el mismo alcance que el listado de vales: si no, filtra
+    // la existencia de folios de otra area o de la otra empresa.
+    const scope = alcanceVales(user);
     for (const v of all(
       `SELECT v.id, v.folio, v.estado, v.created_at, t.numero FROM vales v
        JOIN trailers t ON t.id = v.trailer_id
-       WHERE (v.folio LIKE ?) ${user.rol === 'TRABAJADOR' ? 'AND v.trabajador_id = ?' : ''}
+       WHERE (v.folio LIKE ?) AND ${scope.sql}
        ORDER BY v.created_at DESC LIMIT 8`,
-      like, ...(user.rol === 'TRABAJADOR' ? [user.id] : [])
+      like, ...scope.params
     )) res.push({ tipo: 'VALE', id: v.id, titulo: v.folio, detalle: `Trailer ${v.numero} - ${v.estado}`, ruta: `/vales/${v.id}` });
 
     for (const m of all(
@@ -294,9 +299,12 @@ export default function register(r) {
     }
 
     if (can(user, 'usuarios.leer') || can(user, 'vales.todos') || user.rol === 'SUPERVISOR') {
+      const soloSuEmpresa = user.empresa === 'REYNA';
       for (const u of all(
-        'SELECT id, nombre, employee_id, rol, empresa FROM users WHERE activo = 1 AND (nombre LIKE ? OR employee_id LIKE ?) LIMIT 6',
-        like, like
+        `SELECT id, nombre, employee_id, rol, empresa FROM users
+         WHERE activo = 1 AND (nombre LIKE ? OR employee_id LIKE ?)
+         ${soloSuEmpresa ? 'AND empresa = ?' : ''} LIMIT 6`,
+        like, like, ...(soloSuEmpresa ? [user.empresa] : [])
       )) res.push({ tipo: 'PERSONA', id: u.id, titulo: u.nombre, detalle: `${u.employee_id} - ${u.rol} (${u.empresa})`, ruta: `/usuarios/${u.id}` });
     }
 

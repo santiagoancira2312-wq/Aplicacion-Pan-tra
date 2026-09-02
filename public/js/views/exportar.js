@@ -1,6 +1,6 @@
 /** Exportacion a Excel. La aplicacion es la fuente de verdad; Excel es reporte. */
 import { api } from '../api.js';
-import { h, tarjeta, avisoOk } from '../ui.js';
+import { h, tarjeta, vacio, avisoOk } from '../ui.js';
 import { icono } from '../iconos.js';
 import { tituloVista } from '../app.js';
 
@@ -28,6 +28,15 @@ export async function render() {
     h('div', { clase: 'aviso-titulo', texto: 'Una sola fuente de verdad' }),
     h('div', { texto: 'Toda transaccion se origina y se guarda en la aplicacion. Excel se usa para reportes, analisis e integraciones administrativas, nunca como base de datos.' })
   ));
+
+  if (!reportes.length) {
+    contenedor.appendChild(tarjeta(null, vacio(
+      'No hay reportes disponibles para usted',
+      'Los reportes de esta pantalla contienen informacion de la empresa interna.',
+      'descargar'
+    )));
+    return contenedor;
+  }
 
   contenedor.appendChild(h('div', { clase: 'rejilla c3' },
     reportes.map((r) => {

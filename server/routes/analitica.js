@@ -1,6 +1,6 @@
 import { all, get, setting } from '../db.js';
 import { requireUser } from './auth.js';
-import { can, requirePerm } from '../lib/rbac.js';
+import { can, requirePerm, puedeVerCostos } from '../lib/rbac.js';
 
 const round2 = (n) => Math.round((n || 0) * 100) / 100;
 
@@ -55,13 +55,24 @@ export default function register(r) {
        ORDER BY kit, ABS(SUM(vi.cantidad_entregada) - SUM(vi.cantidad_estandar)) DESC`, ...params
     );
 
+    // Quien no tiene permiso de costos no recibe importes, ni escondidos en el
+    // JSON: el supervisor entra aqui con analitica.area y no ve costos.
+    const verCostos = puedeVerCostos(user);
     return {
-      kits: kits.map((k) => ({
-        ...k,
-        variacion_cantidad: round2((k.entregado || 0) - (k.estandar || 0)),
-        variacion_costo: round2((k.costo_real || 0) - (k.costo_estandar || 0)),
-        variacion_pct: k.estandar ? round2((((k.entregado || 0) - k.estandar) / k.estandar) * 100) : 0
-      })),
+      kits: kits.map((k) => {
+        const { costo_estandar, costo_real, ...resto } = k;
+        const fila = {
+          ...resto,
+          variacion_cantidad: round2((k.entregado || 0) - (k.estandar || 0)),
+          variacion_pct: k.estandar ? round2((((k.entregado || 0) - k.estandar) / k.estandar) * 100) : 0
+        };
+        if (verCostos) {
+          fila.costo_estandar = costo_estandar;
+          fila.costo_real = costo_real;
+          fila.variacion_costo = round2((costo_real || 0) - (costo_estandar || 0));
+        }
+        return fila;
+      }),
       detalle: detalle.map((d) => ({
         ...d,
         variacion: round2((d.entregado || 0) - (d.estandar || 0)),
@@ -249,8 +260,14 @@ export default function register(r) {
   /** Consumo del departamento, para el supervisor de area. */
   r.get('/api/analitica/area', (ctx) => {
     const user = requireUser(ctx);
+    if (!can(user, 'analitica.leer') && !can(user, 'analitica.area')) requirePerm(user, 'analitica.leer');
     const areaId = ctx.query.area_id && can(user, 'analitica.leer') ? Number(ctx.query.area_id) : user.area_id;
     if (!areaId) return { area_id: null, consumo: [], vales: {} };
+
+    // Un usuario de la empresa externa solo cuenta el consumo de su empresa:
+    // antes sumaba las dos y el total del area salia al doble.
+    const empresa = user.empresa === 'REYNA' ? ['REYNA'] : [];
+    const porEmpresa = (columna) => (empresa.length ? `AND ${columna} = ?` : '');
 
     return {
       area_id: areaId,
@@ -261,14 +278,15 @@ export default function register(r) {
          FROM movimientos mv JOIN materiales m ON m.id = mv.material_id
          JOIN unidades un ON un.id = m.unidad_id
          WHERE mv.area_id = ? AND mv.tipo = 'SALIDA' AND mv.created_at >= datetime('now','-90 days')
-         GROUP BY m.id ORDER BY cantidad DESC LIMIT 25`, areaId
+           ${porEmpresa('mv.empresa')}
+         GROUP BY m.id ORDER BY cantidad DESC LIMIT 25`, areaId, ...empresa
       ),
       vales: get(
         `SELECT COUNT(*) AS total,
                 COUNT(*) FILTER (WHERE estado = 'PENDIENTE') AS pendientes,
                 COUNT(*) FILTER (WHERE estado = 'ENTREGADO') AS entregados,
                 COUNT(*) FILTER (WHERE estado = 'RECHAZADO') AS rechazados
-         FROM vales WHERE area_id = ?`, areaId
+         FROM vales WHERE area_id = ? ${porEmpresa('empresa')}`, areaId, ...empresa
       )
     };
   });

@@ -104,7 +104,10 @@ export default function register(r) {
     const user = requireUser(ctx);
     requirePerm(user, 'vales.preparar');
     const valeId = Number(ctx.params.id);
-    const detalle = detalleVale(valeId, null);
+    // Con usuario nulo, detalleVale se salta rol, area y empresa. Hoy no es
+    // explotable porque los tres almacenistas del demo son internos, pero el
+    // dia que exista uno de la empresa externa le entregaria cualquier vale.
+    const detalle = detalleVale(valeId, user);
     const lineas = detalle.items
       .filter((i) => i.cantidad_autorizada > 0)
       .map((i) => ({
