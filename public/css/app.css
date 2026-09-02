@@ -685,7 +685,14 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
   border-radius: var(--r-m); box-shadow: var(--sombra-3); z-index: 60;
   max-height: 460px; overflow-y: auto;
 }
-.notificacion { padding: 13px 16px; border-bottom: 1px solid var(--borde); cursor: pointer; }
+/* Cada notificacion es un boton: hay que apagarle el aspecto que le pone el
+   navegador, sobre todo el color de texto, que en iOS oscuro sale azul. */
+.notificacion {
+  display: block; width: 100%; text-align: left;
+  padding: 13px 16px; border: 0; border-bottom: 1px solid var(--borde);
+  background: none; color: inherit; font-family: inherit; font-size: inherit;
+  cursor: pointer;
+}
 .notificacion:hover { background: var(--superficie-2); }
 .notificacion.no-leida { background: var(--acento-suave); }
 .notificacion-titulo { font-weight: 650; font-size: 14px; }

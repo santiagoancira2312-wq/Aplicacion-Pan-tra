@@ -320,7 +320,6 @@ async function pintarNotificaciones(panel) {
     for (const n of notificaciones) {
       panel.appendChild(h('button', {
         clase: `notificacion ${n.leida_at ? '' : 'no-leida'}`,
-        style: 'display:block;width:100%;text-align:left;border-width:0 0 1px;background:none;font-family:inherit;cursor:pointer',
         onclick: async () => {
           if (!n.leida_at) await api.post(`/api/notificaciones/${n.id}/leer`).catch(() => {});
           panel.classList.add('oculto');
