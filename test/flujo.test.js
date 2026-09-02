@@ -343,6 +343,108 @@ test('el almacen nunca entrega mas de lo que hay en existencia', async () => {
   assert.match(entrega.datos.error, /insuficiente/i);
 });
 
+test('el mismo material en dos lineas no deja el stock fisico negativo', async () => {
+  // Hallazgo 1. Un vale puede traer el mismo material dos veces (un kit mas el
+  // mismo material suelto). Si cada linea compara contra la existencia inicial,
+  // las dos pasan y el fisico queda negativo, que la regla 3 prohibe.
+  const inv = await api('GET', '/api/inventario', undefined, 'admin');
+  const material = inv.datos.inventario.find((m) => m.stock_fisico > 0 && m.stock_fisico < 500);
+  assert.ok(material, 'hace falta un material con existencia para la prueba');
+  const existencia = material.stock_fisico;
+
+  const catalogos = await api('GET', '/api/catalogos', undefined, 'admin');
+  const creado = await api('POST', '/api/vales', {
+    trailer_id: catalogos.datos.trailers[0].id,
+    items: [
+      { material_id: material.id, cantidad: existencia },
+      { material_id: material.id, cantidad: existencia }
+    ]
+  }, 'admin');
+  assert.equal(creado.status, 200);
+  assert.equal(creado.datos.items.length, 2, 'el vale debe quedar con dos lineas del mismo material');
+
+  await api('POST', `/api/vales/${creado.datos.id}/autorizar`, { decision: 'APROBAR' }, 'admin');
+
+  const firma = 'data:image/png;base64,' + Buffer.from(`doble-${Date.now()}-${'z'.repeat(500)}`).toString('base64');
+  const entrega = await api('POST', `/api/almacen/vales/${creado.datos.id}/entregar`, {
+    receptor_nombre: 'Prueba', firma,
+    lineas: creado.datos.items.map((i) => ({ vale_item_id: i.id, cantidad: existencia }))
+  }, 'admin');
+  assert.equal(entrega.status, 409, 'la segunda linea debe rechazarse por existencia insuficiente');
+  assert.match(entrega.datos.error, /insuficiente/i);
+
+  // Y sobre todo: la existencia no se toco y no quedo negativa.
+  const despues = await api('GET', `/api/materiales/${material.id}`, undefined, 'admin');
+  assert.ok(despues.datos.material.stock_fisico >= 0, 'el stock fisico nunca puede ser negativo');
+  assert.equal(despues.datos.material.stock_fisico, existencia, 'una entrega rechazada no descuenta nada');
+});
+
+test('la misma linea repetida en una entrega no descuenta dos veces', async () => {
+  // Variante del hallazgo 1 por la API: la misma linea del vale enviada dos
+  // veces en la misma peticion no debe entregar mas de lo autorizado.
+  const inv = await api('GET', '/api/inventario', undefined, 'admin');
+  const material = inv.datos.inventario.find((m) => m.stock_fisico > 40);
+  assert.ok(material, 'hace falta un material con existencia para la prueba');
+
+  const catalogos = await api('GET', '/api/catalogos', undefined, 'admin');
+  const creado = await api('POST', '/api/vales', {
+    trailer_id: catalogos.datos.trailers[0].id,
+    items: [{ material_id: material.id, cantidad: 10 }]
+  }, 'admin');
+  await api('POST', `/api/vales/${creado.datos.id}/autorizar`, { decision: 'APROBAR' }, 'admin');
+
+  const antes = (await api('GET', `/api/materiales/${material.id}`, undefined, 'admin')).datos.material.stock_fisico;
+  const firma = 'data:image/png;base64,' + Buffer.from(`repetida-${Date.now()}-${'w'.repeat(500)}`).toString('base64');
+  const entrega = await api('POST', `/api/almacen/vales/${creado.datos.id}/entregar`, {
+    receptor_nombre: 'Prueba', firma,
+    lineas: [
+      { vale_item_id: creado.datos.items[0].id, cantidad: 10 },
+      { vale_item_id: creado.datos.items[0].id, cantidad: 10 }
+    ]
+  }, 'admin');
+  assert.equal(entrega.status, 400, 'la segunda copia excede lo autorizado');
+  assert.match(entrega.datos.error, /autorizado/i);
+
+  const despues = (await api('GET', `/api/materiales/${material.id}`, undefined, 'admin')).datos.material.stock_fisico;
+  assert.equal(despues, antes, 'una entrega rechazada no descuenta nada');
+});
+
+test('una entrada de almacen rechaza costos negativos y cantidades absurdas', async () => {
+  // Hallazgo 8. La cantidad solo se validaba > 0 y el costo no se validaba:
+  // una entrada podia multiplicar la existencia y grabar un importe negativo
+  // de millones, que en la demostracion queda a la vista en el panel.
+  const inv = await api('GET', '/api/inventario', undefined, 'admin');
+  const material = inv.datos.inventario[0];
+  const antes = (await api('GET', `/api/materiales/${material.id}`, undefined, 'admin')).datos.material;
+
+  const entrada = (items) => api('POST', '/api/entradas', { items }, 'admin');
+
+  const negativo = await entrada([{ material_id: material.id, cantidad: 10, costo: -500 }]);
+  assert.equal(negativo.status, 400, 'un costo negativo debe rechazarse');
+  assert.match(negativo.datos.error, /costo/i);
+
+  const absurda = await entrada([{ material_id: material.id, cantidad: 100000000, costo: 10 }]);
+  assert.equal(absurda.status, 400, 'una cantidad absurda debe rechazarse');
+  assert.match(absurda.datos.error, /cantidad/i);
+
+  const costoCarisimo = await entrada([{ material_id: material.id, cantidad: 1, costo: 99999999999 }]);
+  assert.equal(costoCarisimo.status, 400, 'un costo absurdo debe rechazarse');
+
+  const costoTexto = await entrada([{ material_id: material.id, cantidad: 1, costo: 'abc' }]);
+  assert.equal(costoTexto.status, 400, 'un costo no numerico se rechaza, no revienta el servidor');
+
+  // Ninguna de las cuatro toco el inventario ni el costo del material.
+  const despues = (await api('GET', `/api/materiales/${material.id}`, undefined, 'admin')).datos.material;
+  assert.equal(despues.stock_fisico, antes.stock_fisico, 'una entrada rechazada no mueve la existencia');
+  assert.equal(despues.costo, antes.costo, 'una entrada rechazada no cambia el costo');
+
+  // Y una entrada normal sigue funcionando.
+  const buena = await entrada([{ material_id: material.id, cantidad: 5, costo: antes.costo }]);
+  assert.equal(buena.status, 200);
+  const final = (await api('GET', `/api/materiales/${material.id}`, undefined, 'admin')).datos.material;
+  assert.equal(final.stock_fisico, antes.stock_fisico + 5);
+});
+
 test('la exportacion a Excel entrega CSV', async () => {
   const res = await fetch(`${BASE}/api/exportar/inventario`, { headers: { Cookie: cookies.get('admin') } });
   assert.equal(res.status, 200);

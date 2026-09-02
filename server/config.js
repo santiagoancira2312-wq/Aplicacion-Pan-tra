@@ -19,6 +19,13 @@ export const SESSION_MINUTES_PIN = Number(process.env.SESSION_MINUTES_PIN || 5);
 export const SESSION_MINUTES_PASSWORD = Number(process.env.SESSION_MINUTES_PASSWORD || 480);
 
 export const MAX_LOGIN_ATTEMPTS = 5;
+
+// Topes de sensatez para los movimientos de almacen. No son reglas de negocio:
+// existen para que un dedazo (un cero de mas, un menos delante del costo) no
+// deje el inventario y el panel con numeros imposibles, sin forma de deshacerlo
+// desde la interfaz.
+export const MAX_CANTIDAD_MOVIMIENTO = 1000000;
+export const MAX_COSTO_UNITARIO = 10000000;
 export const LOCKOUT_MINUTES = 10;
 
 // Valores por defecto de configuracion editables desde la interfaz.

@@ -271,7 +271,7 @@ arreglo debe empezar por reproducir el fallo**, para poder escribir la prueba.
 Van en cuatro grupos, en este orden. **Cada grupo es un commit aparte con sus
 pruebas.** Si se acaba el tiempo, se para al terminar un grupo, nunca a la mitad.
 
-## [ ] 10. Grupo 1 — Integridad de inventario (hallazgos 1 y 8)
+## [x] 10. Grupo 1 — Integridad de inventario (hallazgos 1 y 8)
 
 Lo mas grave y lo mas delicado de tocar, porque es el flujo central.
 
