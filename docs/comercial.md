@@ -111,6 +111,13 @@ imprimir en tarjetas, lista de verificacion y plan B).
 Faltan por llenar en la propuesta: telefono del usuario, y sustituir el correo
 personal de iCloud por uno con dominio propio.
 
+**Dominio: decidido comprarlo despues de la junta, y solo si el cliente compra
+el sistema.** `trazaapp.com` estaba disponible en 10 USD al ano (Cloudflare).
+Consecuencia: la propuesta se entrega con el correo de iCloud, y las
+notificaciones push y Face ID quedan fuera de la demostracion. Se advirtio que
+un correo personal en una propuesta de 18,000 USD resta credibilidad justo en
+el momento de cobrar; el usuario prefiere no gastar antes de vender.
+
 ## Decisiones de arquitectura ya tomadas
 
 **El servidor vive en la planta, no en la nube.** Razones, en orden de peso:

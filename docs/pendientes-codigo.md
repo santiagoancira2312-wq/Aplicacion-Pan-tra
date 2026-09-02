@@ -228,3 +228,18 @@ racks.
 - [ ] Comprar un dominio y montar HTTPS. Sin eso, push y Face ID no se pueden ni
       probar. Tambien habilita anclar la app como aplicacion en el telefono y da
       un correo con dominio propio para la propuesta comercial.
+
+**Decidido: el dominio se compra DESPUES de la junta, y solo si el cliente
+compra el sistema.** `trazaapp.com` estaba disponible en 10 USD al ano; se deja
+apartado como opcion, no reservado.
+
+Consecuencia para el chat de codigo: **las tareas 6 y 7 no se empiezan.** No hay
+donde probarlas y no van a la demostracion. La tarea 3, ya terminada, cubre el
+momento de las notificaciones en la junta.
+
+La demostracion corre sobre un tunel temporal de Cloudflare, que da HTTPS y
+direccion desde datos celulares sin necesidad de dominio:
+
+```
+cloudflared tunnel --url http://localhost:3000
+```
