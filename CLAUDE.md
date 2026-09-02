@@ -164,6 +164,15 @@ pantalla, verificar el resultado en la aplicacion, no solo que compile.
 criterios de aceptacion de cada tarea. Al terminar una, marca su casilla en ese
 archivo dentro del mismo commit.
 
+### Chat de PRUEBAS — encontrar errores antes que el cliente
+
+Recorre la aplicacion intentando romperla y reporta lo que encuentra.
+**Instructivo completo en `docs/pruebas.md`.**
+
+Regla que no se rompe: **encuentra, no arregla.** No modifica codigo de la
+aplicacion; lo unico que escribe y sube es `docs/hallazgos.md`. Lo que encuentra
+lo corrige el chat de codigo, con su prueba de regresion.
+
 ### Chat de DUDAS — "no se como hacer X" / "me esta fallando Y"
 
 Preguntas de operacion y fallas: la app no abre, un error en la Terminal, como
