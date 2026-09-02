@@ -223,7 +223,7 @@ racks.
 
 ---
 
-## [ ] 9. Que la lista abierta se refresque sola
+## [x] 9. Que la lista abierta se refresque sola
 
 **Antes de la presentacion.** Salio al probar la tarea 3 en el telefono: al
 supervisor le llega el aviso y el contador, pero si tiene la pantalla de

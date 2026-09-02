@@ -401,7 +401,10 @@ async function consultarNotificaciones() {
     if (ultimaNotificacionVista === null) { ultimaNotificacionVista = maximo; return; }
 
     const nuevas = notificaciones.filter((n) => n.id > ultimaNotificacionVista);
-    if (!nuevas.length) return;
+    if (!nuevas.length) {
+      if (refrescoPendiente) refrescarVistaAbierta();
+      return;
+    }
     ultimaNotificacionVista = maximo;
 
     // Llegan de la mas reciente a la mas vieja: se muestran al reves para que
@@ -412,7 +415,34 @@ async function consultarNotificaciones() {
     }
     sonarAviso();
     vibrarAviso();
+    refrescarVistaAbierta();
   } catch { /* sin conexion o sesion caida: se reintenta en la siguiente vuelta */ }
+}
+
+// Vistas que saben recargar su lista sin rearmar la pantalla. La vista se
+// registra al pintarse y navegar() lo limpia al cambiar de pantalla, para no
+// recargar una que ya no esta a la vista.
+let recargarVistaActual = null;
+let refrescoPendiente = false;
+export const alLlegarNotificacion = (fn) => { recargarVistaActual = fn; };
+
+/**
+ * Recarga la lista que el usuario tiene delante, si esa pantalla sabe hacerlo.
+ * Nunca mientras hay una ventana abierta (una decision, un formulario, una
+ * firma a medias): se deja para la vuelta siguiente. Si la recarga falla, la
+ * lista se queda como estaba y no se muestra ningun error.
+ */
+async function refrescarVistaAbierta() {
+  if (!recargarVistaActual) return;
+  // A media accion no se toca la pantalla: queda pendiente y se hace en cuanto
+  // la persona cierre lo que tenia abierto.
+  if (document.querySelector('#capas .velo')) { refrescoPendiente = true; return; }
+  refrescoPendiente = false;
+  const desplazamiento = window.scrollY;
+  try {
+    await recargarVistaActual();
+    window.scrollTo(0, desplazamiento);
+  } catch { /* se reintenta cuando llegue la siguiente notificacion */ }
 }
 
 export function iniciarNotificacionesEnVivo() {
@@ -492,6 +522,8 @@ const INICIO_POR_ROL = {
 
 async function navegar(camino) {
   const app = document.getElementById('app');
+  recargarVistaActual = null;
+  refrescoPendiente = false;
 
   // Sin sesion solo existe la pantalla de acceso.
   if (!estado.user) {
