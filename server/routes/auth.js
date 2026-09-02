@@ -63,8 +63,11 @@ export default function register(r) {
     if (!['TRABAJADOR', 'SUPERVISOR', 'ALMACEN'].includes(user.rol)) {
       throw forbidden('Este usuario debe ingresar con correo y contrasena');
     }
-    // Los iPads de planta solo operan dentro de la red autorizada.
-    if (user.rol === 'TRABAJADOR' && !redAutorizada(ctx.ip)) {
+    // Los dispositivos de planta solo operan dentro de la red autorizada: el
+    // trabajador crea el vale ahi y el almacen entrega el material en fisico.
+    // El supervisor autoriza desde donde sea, y direccion y administracion
+    // entran con correo, contrasena y segundo factor.
+    if (['TRABAJADOR', 'ALMACEN'].includes(user.rol) && !redAutorizada(ctx.ip)) {
       throw forbidden('Este dispositivo esta fuera de la red autorizada de la planta.');
     }
 

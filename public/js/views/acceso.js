@@ -111,7 +111,7 @@ export async function render({ alEntrar }) {
       restriccion.restriccion_red && !restriccion.red_autorizada
         ? h('div', { clase: 'aviso rojo mt' },
           h('div', { clase: 'aviso-titulo', texto: 'Dispositivo fuera de la red autorizada' }),
-          h('div', { texto: 'Los vales solo pueden crearse dentro de la red de la planta.' }))
+          h('div', { texto: 'Crear vales y entregar material solo se puede desde la red de la planta. El supervisor si puede autorizar desde fuera.' }))
         : null,
       h('div', { clase: 'campo mt' }, h('label', { texto: 'ID de empleado' }), empleado),
       puntos,

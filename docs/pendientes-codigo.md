@@ -24,7 +24,7 @@
 
 # ANTES DE LA PRESENTACION
 
-## [ ] 1. El almacen tambien queda restringido a la red de la planta
+## [x] 1. El almacen tambien queda restringido a la red de la planta
 
 **Obligatorio.** El anexo que se le entrega al cliente ya afirma este
 comportamiento, asi que el codigo tiene que decir lo mismo.

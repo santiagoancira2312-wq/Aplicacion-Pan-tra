@@ -367,6 +367,51 @@ test('la prediccion y las anomalias responden', async () => {
   assert.ok('variacion_cantidad' in kitsAnalitica.datos.kits[0]);
 });
 
+test('la restriccion de red tambien aplica al almacen', async () => {
+  // Las redes por defecto incluyen 127.0.0.0/8 y las pruebas corren contra
+  // localhost, asi que primero hay que dejar un rango que NO lo incluya.
+  const antes = await api('GET', '/api/admin/configuracion', undefined, 'admin');
+  const valorPrevio = (clave) => {
+    const fila = antes.datos.configuracion.find((c) => c.key === clave);
+    return fila ? fila.value : antes.datos.valores_por_defecto[clave];
+  };
+  const redesOriginales = valorPrevio('redes_permitidas');
+  const restriccionOriginal = valorPrevio('restriccion_red_activa');
+
+  const configurar = (configuracion) =>
+    api('PUT', '/api/admin/configuracion', { configuracion }, 'admin');
+
+  try {
+    await configurar({ restriccion_red_activa: '1', redes_permitidas: '10.99.0.0/16' });
+
+    const almacenFuera = await api('POST', '/api/auth/login-pin',
+      { employee_id: 'ALM-01', pin: '200001' }, 'alm-fuera');
+    assert.equal(almacenFuera.status, 403, 'el almacen no debe entrar desde fuera de la planta');
+    assert.match(almacenFuera.datos.error, /fuera de la red/i);
+
+    const trabajadorFuera = await api('POST', '/api/auth/login-pin',
+      { employee_id: 'EMP-001', pin: '300001' }, 'emp-fuera');
+    assert.equal(trabajadorFuera.status, 403, 'el trabajador sigue restringido');
+
+    // El supervisor autoriza desde donde sea: no debe quedar restringido.
+    const supervisorFuera = await api('POST', '/api/auth/login-pin',
+      { employee_id: 'SUP-01', pin: '100001' }, 'sup-fuera');
+    assert.equal(supervisorFuera.status, 200, 'el supervisor autoriza desde cualquier red');
+
+    // Desde dentro de la red autorizada, el almacen entra normal.
+    await configurar({ redes_permitidas: '127.0.0.0/8' });
+    const almacenDentro = await api('POST', '/api/auth/login-pin',
+      { employee_id: 'ALM-01', pin: '200001' }, 'alm-dentro');
+    assert.equal(almacenDentro.status, 200, 'el almacen si entra desde la planta');
+    assert.equal(almacenDentro.datos.user.rol, 'ALMACEN');
+  } finally {
+    await configurar({
+      restriccion_red_activa: restriccionOriginal,
+      redes_permitidas: redesOriginales
+    });
+  }
+});
+
 test('cerrar sesion invalida la cookie', async () => {
   await api('POST', '/api/auth/logout', {}, 'admin');
   const despues = await api('GET', '/api/auth/me', undefined, 'admin');
