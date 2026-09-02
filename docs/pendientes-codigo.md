@@ -223,6 +223,37 @@ racks.
 
 ---
 
+## [ ] 9. Que la lista abierta se refresque sola
+
+**Antes de la presentacion.** Salio al probar la tarea 3 en el telefono: al
+supervisor le llega el aviso y el contador, pero si tiene la pantalla de
+Autorizaciones a la vista, la lista no se actualiza. El vale aparece hasta que
+toca la notificacion o vuelve a entrar.
+
+Importa por la demostracion: el supervisor va a estar parado en esa pantalla
+esperando, y que no aparezca nada invita a la pregunta "y por que no sale?".
+
+Aprovechar la consulta que ya existe de la tarea 3. Cuando llegue una
+notificacion nueva y el usuario este parado en una pantalla afectada, recargar
+esa lista.
+
+Solo en dos pantallas:
+
+- **Autorizaciones** del supervisor
+- **Cola de surtido** del almacen
+
+No en el panel ni en el resto: ahi seria distraccion.
+
+Cuidados:
+
+- **Nunca recargar mientras el usuario esta a media accion** (un vale abierto,
+  un formulario, una firma en curso). Si hay algo abierto, esperar.
+- Conservar la posicion del desplazamiento: que no brinque la pantalla.
+- Si falla la recarga, no mostrar error ni vaciar la lista: dejarla como estaba.
+
+Es aditivo: si esto falla, todo lo demas sigue funcionando igual. Si se complica,
+dejarlo fuera y avisar.
+
 ## Fuera del codigo, pero bloquea las tareas 6 y 7
 
 - [ ] Comprar un dominio y montar HTTPS. Sin eso, push y Face ID no se pueden ni
