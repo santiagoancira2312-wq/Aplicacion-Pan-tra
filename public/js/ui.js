@@ -276,11 +276,32 @@ export function tabla(columnas, filas, opciones = {}) {
 }
 
 export function pestanas(items, activa, alCambiar) {
-  return h('div', { clase: 'pestanas' }, items.map((it) => h('button', {
+  const tira = h('div', { clase: 'pestanas' }, items.map((it) => h('button', {
     clase: `pestana ${it.id === activa ? 'activa' : ''}`,
     onclick: () => alCambiar(it.id)
   }, it.texto, it.cuenta !== undefined && it.cuenta !== null
     ? h('span', { clase: 'cuenta', texto: String(it.cuenta) }) : null)));
+
+  // En telefono caben tres pestanas de seis. La tira si se desplaza, pero nada
+  // avisaba de que hubiera mas, y las pestanas terminan justo en el borde, asi
+  // que ni siquiera se asoma la siguiente. Se pone una flecha a cada lado que
+  // ademas desplaza al tocarla.
+  const flecha = (lado) => h('button', {
+    clase: `pestanas-flecha ${lado}`, tabindex: '-1', 'aria-hidden': 'true',
+    onclick: () => tira.scrollBy({ left: (lado === 'derecha' ? 1 : -1) * tira.clientWidth * 0.7, behavior: 'smooth' })
+  }, icono('volver', 16));
+
+  const caja = h('div', { clase: 'pestanas-caja' }, flecha('izquierda'), tira, flecha('derecha'));
+  const marcarBordes = () => {
+    const resto = tira.scrollWidth - tira.clientWidth;
+    caja.classList.toggle('mas-derecha', resto > 4 && tira.scrollLeft < resto - 4);
+    caja.classList.toggle('mas-izquierda', tira.scrollLeft > 4);
+  };
+  tira.addEventListener('scroll', marcarBordes, { passive: true });
+  // El observador se va con el elemento; un oyente en window quedaria colgado.
+  if (window.ResizeObserver) new ResizeObserver(marcarBordes).observe(tira);
+  requestAnimationFrame(marcarBordes);
+  return caja;
 }
 
 /** Las cuatro cantidades que el sistema nunca debe perder. */

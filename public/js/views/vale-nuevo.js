@@ -33,7 +33,7 @@ export async function render() {
   const contenedor = h('div', { clase: 'columna' });
   const pasoTrailer = h('div');
   const pasoContenido = h('div');
-  const resumen = h('div');
+  const resumen = h('div', { clase: 'resumen-vale' });
 
   // ------------------------------------------------------------ Paso 1
   function pintarTrailer() {

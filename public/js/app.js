@@ -10,7 +10,12 @@ import { icono } from './iconos.js';
 export const estado = {
   user: null,
   notificaciones: [],
+  // Notificaciones sin leer (el punto de la campana) y vales esperando
+  // autorizacion (el numero junto a Autorizaciones). No son lo mismo: el menu
+  // decia 1 mientras la pantalla decia 5, y bastaba abrir la campana para que
+  // el menu se quedara en 0 con vales todavia esperando.
   pendientes: 0,
+  valesPendientes: 0,
   catalogos: null
 };
 
@@ -205,8 +210,8 @@ function pintarMenu() {
       },
         h('span', { clase: 'icono' }, icono(it.icono, 19)),
         h('span', { texto: it.texto }),
-        it.badge === 'pendientes' && estado.pendientes
-          ? h('span', { clase: 'nav-badge', texto: String(estado.pendientes) }) : null
+        it.badge === 'pendientes' && estado.valesPendientes
+          ? h('span', { clase: 'nav-badge', texto: String(estado.valesPendientes) }) : null
       ))
     ));
   }
@@ -339,6 +344,9 @@ async function pintarNotificaciones(panel) {
 }
 
 export async function actualizarPendientes() {
+  // La llaman las vistas tras decidir un vale: el numero del menu tiene que
+  // bajar en ese momento, no diez segundos despues.
+  actualizarValesPendientes();
   try {
     const { notificaciones_pendientes } = await api.get('/api/auth/me');
     estado.pendientes = notificaciones_pendientes;
@@ -388,8 +396,21 @@ function vibrarAviso() {
   try { if (navigator.vibrate) navigator.vibrate([90, 60, 90]); } catch { /* opcional */ }
 }
 
+/** Vales esperando la decision del supervisor, para el numero del menu. */
+async function actualizarValesPendientes() {
+  if (!estado.user || !puede('vales.autorizar')) return;
+  try {
+    const { pendientes } = await api.get('/api/vales/resumen');
+    if (pendientes !== estado.valesPendientes) {
+      estado.valesPendientes = pendientes;
+      pintarMenu();
+    }
+  } catch { /* se reintenta en la vuelta siguiente */ }
+}
+
 async function consultarNotificaciones() {
   if (!estado.user) return;
+  actualizarValesPendientes();
   try {
     const { notificaciones, pendientes } = await api.get('/api/notificaciones');
     estado.notificaciones = notificaciones;
@@ -487,6 +508,7 @@ export async function cerrarSesion(silencioso = false) {
   try { await api.post('/api/auth/logout'); } catch { /* la cookie se limpia igual */ }
   estado.user = null;
   estado.notificaciones = [];
+  estado.valesPendientes = 0;
   detenerNotificacionesEnVivo();
   ultimaNotificacionVista = null;
   clearTimeout(temporizadorInactividad);

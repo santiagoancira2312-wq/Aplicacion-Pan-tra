@@ -306,7 +306,7 @@ Regla al arreglar: **el permiso y el alcance por empresa se comprueban en el
 servidor, en cada endpoint.** Que la interfaz no muestre un boton no es
 proteccion. Revisar de paso los hallazgos 17 y 18, que son de la misma familia.
 
-## [ ] 12. Grupo 3 — Lo que se ve en la demostracion (hallazgos 9, 10, 21 y 23)
+## [x] 12. Grupo 3 — Lo que se ve en la demostracion (hallazgos 9, 10, 21 y 23)
 
 - **9.** El vale no aparece en Autorizaciones sin recargar. **Es la tarea 9 de
   arriba**; si ya se hizo, marcar las dos.

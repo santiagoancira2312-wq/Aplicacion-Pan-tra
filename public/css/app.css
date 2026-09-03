@@ -406,6 +406,35 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
   -webkit-overflow-scrolling: touch; scrollbar-width: none;
 }
 .pestanas::-webkit-scrollbar { display: none; }
+
+/* Señal de que hay mas pestanas fuera de la vista. El difuminado va sobre la
+   propia tira, no sobre un fondo de color, para que funcione igual dentro de
+   una tarjeta o sobre el fondo de la pagina. */
+.pestanas-caja { position: relative; }
+.pestanas-caja.mas-derecha .pestanas {
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 40px), transparent);
+  mask-image: linear-gradient(to right, #000 calc(100% - 40px), transparent);
+}
+.pestanas-caja.mas-izquierda .pestanas {
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 40px);
+  mask-image: linear-gradient(to right, transparent, #000 40px);
+}
+.pestanas-caja.mas-izquierda.mas-derecha .pestanas {
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 40px, #000 calc(100% - 40px), transparent);
+  mask-image: linear-gradient(to right, transparent, #000 40px, #000 calc(100% - 40px), transparent);
+}
+.pestanas-flecha {
+  position: absolute; top: 50%; transform: translateY(-50%);
+  width: 30px; height: 30px; display: none; place-items: center;
+  border: 1px solid var(--borde); border-radius: 50%;
+  background: var(--superficie); color: var(--texto-2);
+  box-shadow: var(--sombra-1); cursor: pointer; padding: 0; z-index: 2;
+}
+.pestanas-flecha.izquierda { left: -4px; }
+.pestanas-flecha.derecha { right: -4px; }
+.pestanas-flecha.derecha svg { transform: scaleX(-1); }
+.pestanas-caja.mas-izquierda .pestanas-flecha.izquierda,
+.pestanas-caja.mas-derecha .pestanas-flecha.derecha { display: grid; }
 .pestana {
   min-height: 44px; padding: 0 16px; border-radius: var(--r-m);
   border: 1px solid transparent; background: none; color: var(--texto-2);
@@ -774,6 +803,21 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
     top: auto; bottom: calc(74px + env(safe-area-inset-bottom));
     left: 12px; right: 12px; max-width: none;
   }
+  /* Con un kit agregado la pantalla de crear vale mide varios miles de pixeles
+     y el boton de enviar quedaba hasta el final. Se queda a la vista, encima
+     de la barra inferior, para que el paso no sea un desfile de scroll. */
+  .resumen-vale {
+    position: sticky; bottom: calc(72px + env(safe-area-inset-bottom));
+    z-index: 20;
+  }
+  .resumen-vale .tarjeta { box-shadow: var(--sombra-2); }
+  /* Pegada abajo tiene que ser una tira, no media pantalla: el detalle de
+     quien solicita ya se ve arriba y aqui solo estorba. */
+  .resumen-vale .kpi-etiqueta, .resumen-vale .pequeno { display: none; }
+  .resumen-vale .tarjeta-pie { padding: 10px 12px; flex-wrap: nowrap; }
+  .resumen-vale .grande { font-size: 15px; }
+  .resumen-vale .btn-xl { min-height: 50px; font-size: 15px; padding: 0 18px; }
+
   /* Colgado de la campana el panel se sale por la izquierda de la pantalla.
      En telefono se ancla a la cabecera y ocupa todo el ancho: al quitarle la
      posicion a la envoltura, el panel se mide contra la cabecera, asi que
