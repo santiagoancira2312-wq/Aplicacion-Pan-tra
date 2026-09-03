@@ -125,7 +125,7 @@ imposible saber sin caminar al almacen y hacer fila.
 
 Solo presentacion: no tocar consultas ni calculos.
 
-## [ ] 17. El boton no se desactiva mientras la peticion viaja (hallazgos 11 y 19)
+## [x] 17. El boton no se desactiva mientras la peticion viaja (hallazgos 11 y 19)
 
 **Antes de la junta.** Segunda vuelta de pruebas. El chat de pruebas los marco
 como menores; para esta demostracion no lo son: es lo mas probable que salga

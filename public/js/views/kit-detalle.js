@@ -2,7 +2,7 @@
 import { api } from '../api.js';
 import {
   h, vaciar, tarjeta, chip, numero, moneda, fechaHora, cargando, tabla,
-  avisoOk, avisoError, confirmar, semaforo
+  avisoOk, avisoError, confirmar, semaforo, alEscribir
 } from '../ui.js';
 import { icono } from '../iconos.js';
 import { tituloVista, puede } from '../app.js';
@@ -44,7 +44,7 @@ export async function render({ params }) {
       }, icono('mas', 18), 'Nueva version'));
       acciones.push(h('button', {
         clase: 'btn',
-        onclick: async () => {
+        onclick: alEscribir(async () => {
           const ok = await confirmar({
             titulo: kit.activo ? 'Desactivar kit' : 'Activar kit',
             mensaje: kit.activo
@@ -58,7 +58,7 @@ export async function render({ params }) {
             avisoOk('Kit actualizado');
             pintar();
           } catch (err) { avisoError(err.message); }
-        }
+        })
       }, kit.activo ? 'Desactivar' : 'Activar'));
     }
 

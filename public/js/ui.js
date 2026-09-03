@@ -145,13 +145,34 @@ export function modal({ titulo, cuerpo, acciones = [], ancho = '', alCerrar }) {
   const escape = (e) => { if (e.key === 'Escape') cerrar(); };
   document.addEventListener('keydown', escape);
 
-  const pie = acciones.length
-    ? h('div', { clase: 'modal-pie' }, acciones.map((a) => h('button', {
-      clase: `btn ${a.clase || ''}`,
-      onclick: () => { if (a.accion) a.accion(cerrar); else cerrar(); },
-      disabled: a.desactivado
-    }, a.texto)))
-    : null;
+  // Mientras una accion viaja, ningun boton del pie responde: un segundo toque
+  // mandaba la operacion otra vez (dos vales identicos, una entrega duplicada).
+  // Se reactivan al terminar, salga bien o mal, para no dejarlos muertos.
+  const botones = acciones.map((a) => h('button', {
+    clase: `btn ${a.clase || ''}`, disabled: a.desactivado
+  }, a.texto));
+
+  let trabajando = false;
+  botones.forEach((boton, i) => {
+    const a = acciones[i];
+    boton.addEventListener('click', async () => {
+      if (trabajando) return;
+      if (!a.accion) return cerrar();
+      trabajando = true;
+      const comoEstaban = botones.map((b) => b.disabled);
+      for (const b of botones) b.disabled = true;
+      boton.classList.add('trabajando');
+      try {
+        await a.accion(cerrar);
+      } finally {
+        trabajando = false;
+        boton.classList.remove('trabajando');
+        botones.forEach((b, j) => { b.disabled = comoEstaban[j]; });
+      }
+    });
+  });
+
+  const pie = acciones.length ? h('div', { clase: 'modal-pie' }, botones) : null;
 
   const caja = h('div', { clase: `modal ${ancho}`, role: 'dialog', 'aria-modal': 'true' },
     h('div', { clase: 'modal-cabecera' },
@@ -256,6 +277,33 @@ export function disponible(valor, unidad = '') {
  */
 export const sinExistencia = (valor) => (Number(valor) || 0) <= 0;
 export const etiquetaAgotado = (texto = 'AGOTADO') => chip(texto, 'rojo');
+
+/**
+ * Envuelve el manejador de un boton que escribe. Lo apaga en cuanto arranca la
+ * peticion y lo enciende al terminar, SALGA BIEN O MAL, para no dejarlo muerto.
+ *
+ * Sin esto, un segundo toque mientras la peticion viaja manda la operacion otra
+ * vez: dos vales identicos que el supervisor tiene que resolver por separado, o
+ * una entrega duplicada. Sobre el tunel la ventana es mas ancha que en la red
+ * local, y quien va a tocar el boton es alguien que nunca ha visto la app, que
+ * es exactamente quien vuelve a tocar cuando algo no responde al instante.
+ */
+export function alEscribir(manejador) {
+  let trabajando = false;
+  return async function (evento) {
+    if (trabajando) return;
+    trabajando = true;
+    // El boton se toma antes de esperar: despues del await el evento ya no lo trae.
+    const boton = evento && evento.currentTarget;
+    if (boton) { boton.disabled = true; boton.classList.add('trabajando'); }
+    try {
+      return await manejador.call(this, evento);
+    } finally {
+      trabajando = false;
+      if (boton) { boton.disabled = false; boton.classList.remove('trabajando'); }
+    }
+  };
+}
 
 export function tarjeta(titulo, contenido, acciones = null, opciones = {}) {
   return h('div', { clase: 'tarjeta' },

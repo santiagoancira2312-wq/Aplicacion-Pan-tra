@@ -284,6 +284,14 @@ a { color: var(--azul); }
 .btn:hover { filter: brightness(.97); }
 .btn:active { transform: translateY(1px); }
 .btn:disabled { opacity: .5; cursor: not-allowed; }
+/* Un boton que escribe se apaga mientras la peticion viaja, y ensena que esta
+   trabajando para que la persona no sienta que no paso nada y vuelva a tocar. */
+.btn.trabajando { pointer-events: none; }
+.btn.trabajando::before {
+  content: ''; width: 15px; height: 15px; flex: none;
+  border-radius: 50%; border: 2px solid currentColor; border-top-color: transparent;
+  animation: girar .7s linear infinite;
+}
 .btn-primario { background: var(--acento); border-color: var(--acento); color: #fff; }
 .btn-oscuro { background: var(--c-8); border-color: var(--c-8); color: #fff; }
 .btn-verde { background: var(--verde); border-color: var(--verde); color: #fff; }

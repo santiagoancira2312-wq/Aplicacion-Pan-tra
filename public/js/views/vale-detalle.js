@@ -5,7 +5,7 @@
 import { api } from '../api.js';
 import {
   h, vaciar, tarjeta, chipEstado, chip, numero, moneda, fechaHora, fecha,
-  cantidades, avisoOk, avisoError, modal, pedirTexto, confirmar, tabla
+  cantidades, avisoOk, avisoError, modal, pedirTexto, confirmar, tabla, alEscribir
 } from '../ui.js';
 import { icono } from '../iconos.js';
 import { tituloVista, estado, puede } from '../app.js';
@@ -38,7 +38,7 @@ export async function render({ params }) {
     if (vale.estado === 'PENDIENTE' && vale.trabajador_id === estado.user.id) {
       acciones.push(h('button', {
         clase: 'btn',
-        onclick: async () => {
+        onclick: alEscribir(async () => {
           const motivo = await pedirTexto({ titulo: 'Cancelar vale', etiqueta: 'Motivo de la cancelacion', textoOk: 'Cancelar vale' });
           if (!motivo) return;
           try {
@@ -46,7 +46,7 @@ export async function render({ params }) {
             avisoOk('Vale cancelado');
             pintar();
           } catch (err) { avisoError(err.message); }
-        }
+        })
       }, 'Cancelar vale'));
     }
     if (puede('vales.preparar') && ['APROBADO', 'APROBADO_PARCIAL', 'EN_PREPARACION', 'PREPARADO', 'ENTREGA_PARCIAL'].includes(vale.estado)) {

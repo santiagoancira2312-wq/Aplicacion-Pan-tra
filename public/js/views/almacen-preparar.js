@@ -6,7 +6,7 @@ import { api } from '../api.js';
 import {
   h, vaciar, tarjeta, chip, chipEstado, numero, moneda, fechaHora, cargando,
   avisoOk, avisoError, modal, pedirTexto, confirmar, cantidades,
-  sinExistencia, etiquetaAgotado
+  sinExistencia, etiquetaAgotado, alEscribir
 } from '../ui.js';
 import { icono } from '../iconos.js';
 import { tituloVista, puede } from '../app.js';
@@ -42,7 +42,7 @@ export async function render({ params }) {
     if (porSurtir.length && puede('vales.cerrar')) {
       acciones.push(h('button', {
         clase: 'btn',
-        onclick: async () => {
+        onclick: alEscribir(async () => {
           const motivo = await pedirTexto({
             titulo: 'Cerrar pendiente',
             etiqueta: 'Motivo (el material ya no sera necesario)',
@@ -54,7 +54,7 @@ export async function render({ params }) {
             avisoOk('Pendiente cerrado');
             pintar();
           } catch (err) { avisoError(err.message); }
-        }
+        })
       }, 'Cerrar pendiente'));
     }
     acciones.push(h('button', { clase: 'btn btn-plano', onclick: () => ir(`/vales/${vale.id}`) }, 'Ver vale completo'));
@@ -119,13 +119,13 @@ export async function render({ params }) {
     function botonEstado(nuevo, texto, clase) {
       return h('button', {
         clase,
-        onclick: async () => {
+        onclick: alEscribir(async () => {
           try {
             await api.post(`/api/almacen/vales/${vale.id}/estado`, { estado: nuevo });
             avisoOk(`Vale marcado como ${texto.toLowerCase()}`);
             pintar();
           } catch (err) { avisoError(err.message); }
-        }
+        })
       }, texto);
     }
 
@@ -240,7 +240,18 @@ export async function render({ params }) {
                   ? 'Entrega registrada. Inventario actualizado.'
                   : 'Entrega parcial registrada. El vale permanece abierto.');
                 pintar();
-              } catch (err) { avisoError(err.message); }
+              } catch (err) {
+                // Un 409 por firma repetida quiere decir que la entrega anterior
+                // SI se registro: no es un fallo que reportarle al almacenista en
+                // rojo encima de una operacion que funciono.
+                if (err.status === 409 && /firma ya fue registrada/i.test(err.message)) {
+                  cerrar();
+                  avisoOk('Esa entrega ya estaba registrada. No se duplico nada.');
+                  pintar();
+                  return;
+                }
+                avisoError(err.message);
+              }
             }
           }
         ]

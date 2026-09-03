@@ -2,7 +2,7 @@
 import { api, qs } from '../api.js';
 import {
   h, vaciar, tarjeta, chip, numero, fechaHora, cargando, vacio, tabla, campo,
-  selector, modal, avisoOk, avisoError, confirmar, iniciales
+  selector, modal, avisoOk, avisoError, confirmar, iniciales, alEscribir
 } from '../ui.js';
 import { icono } from '../iconos.js';
 import { tituloVista, puede } from '../app.js';
@@ -170,11 +170,13 @@ export async function render() {
           h('div', { clase: 'aviso-titulo', texto: 'Cuenta bloqueada por intentos fallidos' }),
           h('button', {
             clase: 'btn btn-s mt',
-            onclick: async () => {
-              await api.post(`/api/usuarios/${usuario.id}/desbloquear`);
-              avisoOk('Usuario desbloqueado');
-              cargar();
-            }
+            onclick: alEscribir(async () => {
+              try {
+                await api.post(`/api/usuarios/${usuario.id}/desbloquear`);
+                avisoOk('Usuario desbloqueado');
+                cargar();
+              } catch (err) { avisoError(err.message); }
+            })
           }, 'Desbloquear ahora')
         ) : null,
         campo('Restablecer PIN', pin, 'Se usa en los dispositivos de planta'),
