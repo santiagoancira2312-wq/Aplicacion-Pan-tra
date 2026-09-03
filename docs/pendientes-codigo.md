@@ -104,9 +104,20 @@ color no comunica "ya no hay".
   mostrar la palabra **AGOTADO** en texto, no solo el color.
 - Al agregar un material agotado, avisar de forma visible.
 
-**Avisar, no bloquear.** La regla 3 permite el disponible negativo a proposito:
-se pide material que viene en camino. Si el sistema impide pedirlo, se rompe un
-caso real de operacion. El trabajador decide.
+**El ciclo real es de minutos, no de dias.** El trabajador pide a las 3:00 y a
+las 3:10 esta en el mostrador del almacen. Lo que no esta en el estante ahora no
+va a estar en diez minutos, asi que el objetivo de este aviso no es informar:
+es **evitarle el viaje en balde**.
+
+Aun asi, **avisar y no bloquear**, por una razon distinta a la de la regla 3: en
+los primeros meses el stock del sistema y el del estante no coinciden. Si dice 0
+y en el rack hay 20, bloquear deja al trabajador sin salida y sin nadie a quien
+reclamar. Que el aviso sea imposible de pasar por alto, y que el decida.
+
+- Antes de enviar el vale, si trae material sin existencia, un aviso claro:
+  cuantas lineas y que el almacen no va a poder entregarlas hoy.
+- Que la lista de surtido del almacen tambien marque esas lineas, para que el
+  almacenista lo sepa antes de que el trabajador llegue.
 
 Solo presentacion: no tocar consultas ni calculos.
 
@@ -167,6 +178,24 @@ se lee en la vista de inventario. Falta el almacenamiento de archivos.
 
 Es la funcion de mas valor por hora de trabajo y la unica de esta seccion que no
 depende de HTTPS.
+
+## [ ] 16. La sesion del supervisor no puede durar 5 minutos
+
+Sale del ritmo real de la planta: el trabajador pide a las 3:00 y a las 3:10
+esta en el almacen, asi que **el supervisor esta en la ruta critica** y tiene que
+autorizar dentro de esa ventana. Con la sesion de 5 minutos, mete su PIN cada
+vez que le llega un vale. En tres dias lo odia y vuelve al papel.
+
+Su telefono es personal, no una iPad compartida de planta: la sesion corta se
+diseno para las iPads, y al supervisor no le aplica la misma razon.
+
+- Separar el tiempo de sesion por rol, configurable desde Configuracion.
+  Trabajador y almacen (iPads compartidas) se quedan cortos; supervisor mucho
+  mas largo.
+- Cuidado: el supervisor sigue entrando con PIN, asi que no basta con cambiar
+  `sesion_pin_minutos`, que hoy aplica a los tres roles por igual.
+
+Va junto con la tarea 5, que resuelve lo mismo para direccion y gerencia.
 
 ## [ ] 5. Sesiones largas en dispositivos de confianza
 

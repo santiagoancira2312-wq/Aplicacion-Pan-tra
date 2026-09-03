@@ -84,6 +84,27 @@ Reglas que no se negocian:
 Las tres primeras dan el tamano. **La cuarta da el precio**, porque es la cifra
 contra la que se compara la cotizacion.
 
+## El ritmo real de la planta (dato del usuario, no supuesto)
+
+**El vale se pide y se recoge con minutos de diferencia**, no de un dia para
+otro: el trabajador lo levanta a las 3:00 y a las 3:10 esta en el mostrador del
+almacen.
+
+Consecuencias:
+
+- **El supervisor esta en la ruta critica.** Tiene que autorizar dentro de esa
+  ventana o el trabajador se queda parado. Por eso las notificaciones no son un
+  lujo: sostienen el flujo completo.
+- Con papel son **dos viajes y una busqueda**: llenar el vale, caminar a buscar
+  al supervisor, encontrarlo o no, y luego caminar al almacen.
+
+La frase de venta que sale de aqui, y es de las mejores que hay:
+
+> "El supervisor autoriza desde su telefono en lo que el trabajador camina al
+> almacen. Cuando llega, su material ya esta autorizado."
+
+Concreta, medible y entendible por cualquiera. Vale mas que cualquier tablero.
+
 ## Argumentos especificos para este cliente
 
 1. **Cada unidad es distinta** → kits versionados que se ajustan por vale sin
