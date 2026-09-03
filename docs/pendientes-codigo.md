@@ -125,6 +125,56 @@ imposible saber sin caminar al almacen y hacer fila.
 
 Solo presentacion: no tocar consultas ni calculos.
 
+## [ ] 17. El boton no se desactiva mientras la peticion viaja (hallazgos 11 y 19)
+
+**Antes de la junta.** Segunda vuelta de pruebas. El chat de pruebas los marco
+como menores; para esta demostracion no lo son: es lo mas probable que salga
+mal frente al cliente.
+
+Un mismo error visto en dos pantallas: el boton sigue activo mientras la
+peticion esta en camino, asi que un segundo toque manda la operacion otra vez.
+
+- **Hallazgo 11.** Doble toque en ENVIAR VALE crea dos vales identicos. Con la
+  red lenta bastan 400 ms de separacion. El supervisor se encuentra dos
+  solicitudes iguales que tiene que resolver por separado.
+- **Hallazgo 19.** Lo mismo en la pantalla de entregas: el segundo clic recibe
+  409 y se pinta **un aviso rojo encima de una entrega que si funciono**. El
+  inventario queda correcto, pero el almacenista y quien vea su pantalla creen
+  que fallo.
+
+Por que importa justo ahora: la demostracion corre **sobre un tunel**, mas lento
+que la red local, asi que la ventana para el segundo toque se ensancha; y quien
+va a tocar el boton es alguien que nunca ha visto la app, que es exactamente
+quien vuelve a tocar cuando algo no responde al instante.
+
+Que hacer:
+
+- Desactivar el boton en cuanto arranca la peticion y reactivarlo al terminar,
+  **tanto si sale bien como si falla**, para no dejarlo muerto.
+- Indicar visualmente que esta trabajando, para que la persona no sienta que no
+  paso nada.
+- Aplicarlo a **todas** las acciones que escriben: enviar vale, autorizar,
+  preparar, entregar, devolver, cerrar, y los formularios de alta y edicion.
+- No pintar en rojo una operacion que si se completo: un 409 de duplicado sobre
+  una entrega ya registrada no es un fallo que reportarle al usuario.
+
+Es cambio de interfaz, aditivo. No tocar la logica del servidor.
+
+## [ ] 18. Digitos fuera del campo entran al PIN (hallazgo 18)
+
+**Solo si la tarea 17 sale limpia y sobra tiempo.** El manejador de teclado esta
+en el documento y no en el campo, asi que cualquier digito escrito en la pantalla
+de acceso entra al PIN. Barato de arreglar, pero es la pantalla que todos tocan
+primero y cualquier cambio ahi se nota.
+
+## Hallazgos que NO se arreglan antes de la junta
+
+De la segunda vuelta quedan abiertos los **12, 13, 14, 15, 17 y 20** (numeracion
+de `docs/hallazgos.md`). Nadie va a escribir `1e15`, ni pegar 5,000 caracteres,
+ni cambiar un costo por la API, ni tener una sesion de administrador abierta
+para sobrescribir un 2FA. El **16** ya esta resuelto por operacion, arrancando
+con `SECURE_COOKIES=1`.
+
 ---
 
 # DESPUES DE LA PRESENTACION
