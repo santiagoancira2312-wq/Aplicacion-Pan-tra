@@ -94,12 +94,63 @@ Criterios:
 - Verificar con dos navegadores abiertos: crear un vale en uno y ver que el aviso
   aparece solo en el otro, sin recargar.
 
+## [ ] 14. Decir "AGOTADO" con todas sus letras al crear un vale
+
+Hoy el buscador de materiales muestra `Disponible: N` y un punto de color con el
+semaforo, y las lineas del vale muestran el disponible. En una iPad, un punto de
+color no comunica "ya no hay".
+
+- En el buscador y en las lineas del vale, cuando el disponible sea 0 o menos,
+  mostrar la palabra **AGOTADO** en texto, no solo el color.
+- Al agregar un material agotado, avisar de forma visible.
+
+**Avisar, no bloquear.** La regla 3 permite el disponible negativo a proposito:
+se pide material que viene en camino. Si el sistema impide pedirlo, se rompe un
+caso real de operacion. El trabajador decide.
+
+Solo presentacion: no tocar consultas ni calculos.
+
 ---
 
 # DESPUES DE LA PRESENTACION
 
 Estas tareas suben el valor del producto. **No empezarlas antes de la junta:**
 la app esta terminada y probada, y una funcion nueva agrega riesgo, no valor.
+
+## [ ] 15. Cerrar una linea del vale, y sustituir un material
+
+Nace de dos peticiones reales: el trabajador ya no necesita un material, o se
+equivoco de material y el almacenista lo descubre en el mostrador.
+
+**Lo que NO se hace: dejar que el almacen edite o borre la linea.** Rompe la
+regla 1 (las cuatro cantidades no se sobrescriben) y la 12 (no se borra
+informacion historica). Un almacenista que puede borrar lineas del vale de otro
+es el agujero que ya tenia el papel.
+
+**Ya no lo necesita** -> cerrar esa linea con motivo, entregada = 0, el resto del
+vale sigue vivo. Ya existe `POST /api/almacen/vales/:id/cerrar-pendiente` pero
+cierra el vale completo; falta poder cerrar **una sola linea**. La infraestructura
+esta: `estado_linea = 'CERRADA'` y `motivo_linea` ya existen en el esquema.
+
+**Se equivoco de material** -> sustitucion, no edicion. La linea original se
+cierra con motivo, y se agrega una linea nueva marcada como sustitucion de
+aquella. Las dos quedan en el vale y en la auditoria.
+
+Reglas:
+
+- Motivo obligatorio, de una lista corta y configurable (ya existe la tabla
+  `motivos_rechazo`, ver si sirve o hace falta una propia).
+- **Notificar al trabajador y al supervisor en el momento.** El almacenista puede
+  cerrar la linea, pero la decision no es suya: la trazabilidad resuelve el
+  problema de autoridad. Las notificaciones en vivo ya funcionan.
+- La **sustitucion la confirma el supervisor**, porque cambia el costo del
+  trailer. Configurable desde Configuracion, activado por defecto.
+- Todo a auditoria con usuario, motivo, linea anterior y linea nueva.
+- El comprometido y el disponible se recalculan al cerrar la linea.
+
+Efecto secundario que vale dinero: con esto se puede contar cuantas veces se
+pidio mal cada material. Senala nombres confusos, kits mal armados y gente que
+necesita capacitacion. Ese dato hoy no existe en ningun lado.
 
 ## [ ] 4. Fotos de materiales
 
