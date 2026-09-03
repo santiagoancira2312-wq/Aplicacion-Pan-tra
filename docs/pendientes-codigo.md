@@ -160,7 +160,7 @@ Que hacer:
 
 Es cambio de interfaz, aditivo. No tocar la logica del servidor.
 
-## [ ] 18. Digitos fuera del campo entran al PIN (hallazgo 18)
+## [x] 18. Digitos fuera del campo entran al PIN (hallazgo 18)
 
 **Solo si la tarea 17 sale limpia y sobra tiempo.** El manejador de teclado esta
 en el documento y no en el campo, asi que cualquier digito escrito en la pantalla
