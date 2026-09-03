@@ -296,6 +296,45 @@ Efecto secundario que vale dinero: con esto se puede contar cuantas veces se
 pidio mal cada material. Senala nombres confusos, kits mal armados y gente que
 necesita capacitacion. Ese dato hoy no existe en ningun lado.
 
+## [ ] 21. Grafica de tendencia interactiva en el panel
+
+Idea del usuario: que la tendencia de los ultimos 30 dias se pueda recorrer para
+ver dias individuales, con selector de rangos como una plataforma de acciones.
+
+**Lo que si, tal cual:** tocar o arrastrar sobre la grafica y ver el dia y su
+importe. Es la mejor parte de la idea y la mas barata.
+
+**El selector, acotado a cuatro: 7D / 30D / 3M / 6M.** Nada de 1D (un dia no es
+una tendencia), ni 1 ano ni YTD: los datos del demo empiezan el 15 de febrero,
+asi que esos dos rangos saldrian con la mitad de la grafica plana en cero, que
+se ve peor que no tener el boton. Cuando haya historia real se agregan.
+
+**Lo que hay que cambiar del planteamiento original:** la metafora de acciones no
+aplica. Una accion sube y baja sola; aqui el consumo sube porque hay mas trailers
+en proceso, no es senal independiente. Una linea de gasto diario contesta "cuanto
+gastamos", pero no "esta bien o mal", que es la pregunta del dueno.
+
+Lo que la vuelve herramienta de direccion es **comparar contra algo**:
+
+- Gasto de material contra unidades entregadas en el mismo periodo.
+- El periodo actual contra el anterior, encimados.
+
+Asi un pico deja de ser "gastamos mucho el martes" y se vuelve "gastamos 30% mas
+por unidad que el mes pasado", que ya es un hallazgo.
+
+Tecnico:
+
+- Las graficas son SVG a mano en `public/js/graficas.js`, sin librerias, por la
+  CSP. La interaccion se programa a mano.
+- **En telefono no hay cursor**: tocar y arrastrar, no pasar el mouse. Los cuatro
+  botones tienen que caber en 390 px.
+- Datos disponibles hoy: 1,174 movimientos entre el 15-feb y el 3-sep, con 28 de
+  los ultimos 30 dias con movimiento. Densidad suficiente para una linea diaria.
+
+**Antes de construirla, preguntarle al cliente que quiere ver ahi.** Es la unica
+pantalla del sistema donde el dueno decide el contenido, y preguntarselo en la
+junta da requisitos reales en vez de adivinanzas.
+
 ## [ ] 4. Fotos de materiales
 
 El campo `foto` ya existe en la tabla `materiales` (`server/schema.sql:142`) y ya
