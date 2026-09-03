@@ -154,6 +154,22 @@ puede durar 5 minutos (tarea 16 de docs/pendientes-codigo.md).
 5. **Estan creciendo** → siete puntos de venta; cada uno es ampliacion del
    contrato.
 
+## Que decir sobre la madurez del sistema
+
+**Nunca decir "no tiene errores".** Al 3 de septiembre: cero bloqueantes y cero
+graves conocidos, con siete hallazgos menores abiertos que no se ven en una
+demostracion de quince minutos. No es lo mismo, y prometer de mas es la forma
+mas rapida de perder al cliente en el mes tres.
+
+Lo que si se puede decir, y es cierto:
+
+> "Esta probado de punta a punta: 20 pruebas automatizadas y dos vueltas de
+> revision buscando fallas a proposito. Lo que quede lo corregimos durante la
+> puesta en marcha, que por eso son cuatro semanas y no una."
+
+Si en la junta sale algo raro en pantalla: **no taparlo.** "Eso lo reviso y les
+aviso hoy mismo", y seguir. Intentar disimularlo se nota mucho mas que el error.
+
 ## Documentos publicados
 
 Paginas privadas del usuario, misma identidad visual (acero + ambar,

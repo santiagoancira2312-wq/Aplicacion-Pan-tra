@@ -175,6 +175,53 @@ ni cambiar un costo por la API, ni tener una sesion de administrador abierta
 para sobrescribir un 2FA. El **16** ya esta resuelto por operacion, arrancando
 con `SECURE_COOKIES=1`.
 
+## [ ] 19. Cambiar el segundo factor debe pedir la contrasena y quedar en auditoria (hallazgo 14)
+
+**Antes de la junta.** No por el riesgo de que pase, sino porque **contradice lo
+que se afirma en la demostracion**.
+
+Con una sesion de administrador ya abierta, `2fa/iniciar` sobrescribe el secreto
+del segundo factor sin pedir la contrasena, deja fuera al administrador legitimo
+y **no queda registrado en auditoria**.
+
+En el paso 7 del guion se abre Auditoria y se dice que todo cambio critico queda
+con usuario, hora y valor anterior. La regla 12. Este es un cambio critico que no
+queda. Es la misma clase de problema que la restriccion del almacen: el codigo
+tiene que decir lo que se afirma.
+
+- Pedir la contrasena actual (y el codigo vigente, si ya tiene 2FA activo) antes
+  de iniciar o reemplazar el segundo factor.
+- Registrar en auditoria el alta, el reemplazo y la desactivacion.
+- Revisar de paso `2fa/activar` y `2fa/desactivar`, que son del mismo grupo.
+
+**Cuidado: esto toca el acceso del administrador, que es la cuenta que se usa en
+la demostracion.** Al terminar, entrar y salir con `admin@demo.local` y con
+`direccion@demo.local`, con y sin 2FA activo. Si algo queda dudoso, revertir:
+vale mas el hallazgo abierto que quedarse fuera de la app en la junta.
+
+## [ ] 20. Tope de cantidad en los vales (hallazgo 12)
+
+**Antes de la junta.** Un vale acepta `1e15` piezas. Las entradas de almacen ya
+tienen tope desde el grupo 1; los vales no.
+
+Riesgo real: alguien de Panamerican, que ve la app por primera vez, teclea de mas
+en una cantidad. Si se autoriza, la pantalla de inventario queda con numeros
+imposibles delante de todos.
+
+Usar el mismo patron y el mismo tope que ya se puso en las entradas, para que el
+mensaje de error sea consistente. Aplica al crear el vale y al autorizar.
+
+## Hallazgos que quedan abiertos a proposito
+
+Despues de las tareas 19 y 20 quedan cinco: **13, 15, 16, 17 y 20** de
+`docs/hallazgos.md`. Ninguno se ve en una demostracion de quince minutos. El 16
+se resuelve arrancando con `SECURE_COOKIES=1`.
+
+**Que quede claro para cualquier chat que lea esto: la aplicacion NO esta libre
+de errores.** No tiene bloqueantes ni graves conocidos, que no es lo mismo. Y el
+chat de pruebas lo dijo bien: que el no encuentre mas no significa que no haya
+mas &mdash; encontro 23 en la primera vuelta y uno se le escapo hasta la segunda.
+
 ---
 
 # DESPUES DE LA PRESENTACION
