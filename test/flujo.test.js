@@ -525,6 +525,38 @@ test('el alcance por rol y por empresa se comprueba en el servidor', async () =>
   }
 });
 
+test('el trabajador recibe el disponible para saber que esta agotado', async () => {
+  // Tarea 14. La palabra AGOTADO se pinta en el navegador a partir de este
+  // dato: si algun dia deja de venir, el aviso desaparece sin que nada falle.
+  await api('POST', '/api/auth/login-pin', { employee_id: 'EMP-001', pin: '300001' }, 'emp14');
+
+  const busqueda = await api('GET', '/api/materiales?q=a&limit=10', undefined, 'emp14');
+  assert.equal(busqueda.status, 200);
+  assert.ok(busqueda.datos.materiales.length, 'la busqueda debe devolver materiales');
+  for (const m of busqueda.datos.materiales) {
+    assert.equal(typeof m.disponible, 'number', `${m.sku} debe traer disponible`);
+  }
+
+  const kits = await api('GET', '/api/kits', undefined, 'emp14');
+  const kit = kits.datos.kits.find((k) => k.version_id);
+  const version = await api('GET', `/api/kits/version/${kit.version_id}`, undefined, 'emp14');
+  assert.ok(version.datos.items.length);
+  for (const i of version.datos.items) {
+    assert.equal(typeof i.disponible, 'number', `${i.sku} del kit debe traer disponible`);
+  }
+
+  // Y la lista de surtido del almacen necesita la existencia fisica.
+  const cola = await api('GET', '/api/almacen/cola', undefined, 'almacen');
+  const alguno = [...(cola.datos.nuevos || []), ...(cola.datos.preparados || [])][0];
+  if (alguno) {
+    const prep = await api('GET', `/api/almacen/vales/${alguno.id}/preparacion`, undefined, 'almacen');
+    assert.equal(prep.status, 200);
+    for (const l of prep.datos.lineas) {
+      assert.equal(typeof l.stock_fisico, 'number', `${l.sku_snapshot} debe traer existencia fisica`);
+    }
+  }
+});
+
 test('la exportacion a Excel entrega CSV', async () => {
   const res = await fetch(`${BASE}/api/exportar/inventario`, { headers: { Cookie: cookies.get('admin') } });
   assert.equal(res.status, 200);

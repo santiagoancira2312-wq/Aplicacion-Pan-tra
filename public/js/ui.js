@@ -249,6 +249,14 @@ export function disponible(valor, unidad = '') {
   );
 }
 
+/**
+ * En una iPad, un punto de color no comunica "ya no hay": hay que decirlo con
+ * todas sus letras. Se usa en el buscador de materiales, en las lineas del vale
+ * y en la lista de surtido del almacen, para que sea la misma senal en los tres.
+ */
+export const sinExistencia = (valor) => (Number(valor) || 0) <= 0;
+export const etiquetaAgotado = (texto = 'AGOTADO') => chip(texto, 'rojo');
+
 export function tarjeta(titulo, contenido, acciones = null, opciones = {}) {
   return h('div', { clase: 'tarjeta' },
     titulo ? h('div', { clase: 'tarjeta-cabecera' },

@@ -94,7 +94,7 @@ Criterios:
 - Verificar con dos navegadores abiertos: crear un vale en uno y ver que el aviso
   aparece solo en el otro, sin recargar.
 
-## [ ] 14. Decir "AGOTADO" con todas sus letras al crear un vale
+## [x] 14. Decir "AGOTADO" con todas sus letras al crear un vale
 
 Hoy el buscador de materiales muestra `Disponible: N` y un punto de color con el
 semaforo, y las lineas del vale muestran el disponible. En una iPad, un punto de

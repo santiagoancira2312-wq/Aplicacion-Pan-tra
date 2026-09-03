@@ -6,7 +6,7 @@
 import { api } from '../api.js';
 import {
   h, vaciar, tarjeta, campo, aviso, avisoError, avisoOk, chip, numero,
-  controlCantidad, modal, confirmar, cargando, vacio
+  controlCantidad, modal, confirmar, cargando, vacio, sinExistencia, etiquetaAgotado
 } from '../ui.js';
 import { icono } from '../iconos.js';
 import { tituloVista, estado } from '../app.js';
@@ -110,7 +110,10 @@ export async function render() {
           },
             h('div', { style: 'flex:1;min-width:0' },
               h('div', { clase: 'resultado-nombre', texto: m.nombre }),
-              h('div', { clase: 'resultado-meta' }, `${m.sku} · ${m.unidad} · Disponible: ${numero(m.disponible)}`),
+              h('div', { clase: 'resultado-meta' },
+                sinExistencia(m.disponible)
+                  ? [`${m.sku} · ${m.unidad} `, etiquetaAgotado()]
+                  : `${m.sku} · ${m.unidad} · Disponible: ${numero(m.disponible)}`),
               coincideAlias ? h('div', { clase: 'resultado-alias', texto: `tambien conocido como "${coincideAlias}"` }) : null
             ),
             h('span', { clase: `semaforo ${m.semaforo}` }),
@@ -180,6 +183,10 @@ export async function render() {
         }))
       });
       avisoOk(`${k.nombre} agregado. Puede ajustar las cantidades para este vale.`);
+      const agotados = items.filter((i) => sinExistencia(i.disponible)).length;
+      if (agotados) {
+        avisoError(`${k.nombre}: ${agotados} ${agotados === 1 ? 'material agotado' : 'materiales agotados'}. El almacen no los va a poder entregar hoy.`);
+      }
       pintarLineas();
       pintarResumen();
     } catch (err) { avisoError(err.message); }
@@ -192,6 +199,12 @@ export async function render() {
       aviso(`${m.nombre}: cantidad actualizada`);
     } else {
       borrador.sueltos.push({ material: m, cantidad: 1 });
+    }
+    // Se agrega igual: el vale no se bloquea. Pero el aviso tiene que costar
+    // trabajo pasarlo por alto, porque el trabajador va a estar en el mostrador
+    // del almacen en diez minutos y ese viaje seria en balde.
+    if (sinExistencia(m.disponible)) {
+      avisoError(`${m.nombre}: AGOTADO. El almacen no lo va a poder entregar hoy.`);
     }
     pintarLineas();
     pintarResumen();
@@ -259,7 +272,9 @@ export async function render() {
         h('div', { clase: 'linea-vale-meta' },
           `${it.sku} · ${it.unidad}`,
           estandar !== null ? ` · estandar ${numero(estandar)}` : '',
-          it.disponible !== undefined ? ` · disponible ${numero(it.disponible)}` : ''
+          it.disponible === undefined ? ''
+            : sinExistencia(it.disponible) ? [' ', etiquetaAgotado()]
+              : ` · disponible ${numero(it.disponible)}`
         ),
         nota
       ),
@@ -304,7 +319,10 @@ export async function render() {
       for (const it of k.items) filas.push({ ...it, kit: k.kit.nombre });
     }
     for (const s of borrador.sueltos) {
-      filas.push({ nombre: s.material.nombre, sku: s.material.sku, unidad: s.material.unidad, cantidad: s.cantidad, estandar: null });
+      filas.push({
+        nombre: s.material.nombre, sku: s.material.sku, unidad: s.material.unidad,
+        cantidad: s.cantidad, estandar: null, disponible: s.material.disponible
+      });
     }
 
     const prioridad = h('select', {},
@@ -312,17 +330,39 @@ export async function render() {
     );
     const notas = h('textarea', { placeholder: 'Opcional: alguna aclaracion para el supervisor', rows: 2 });
 
+    // El vale se puede enviar igual. Pero en los primeros meses el stock del
+    // sistema y el del estante no coinciden, y bloquear dejaria al trabajador
+    // sin salida: se avisa fuerte y el decide.
+    const agotadas = filas.filter((f) => f.disponible !== undefined && sinExistencia(f.disponible));
+
     const cuerpo = h('div', {},
       h('div', { clase: 'aviso' },
         h('div', { clase: 'aviso-titulo', texto: `Trailer ${trailer.numero}` }),
         h('div', { texto: `${filas.length} materiales. El folio se asigna automaticamente al enviar.` })
       ),
+      agotadas.length ? h('div', { clase: 'aviso rojo mt' },
+        h('div', { clase: 'aviso-titulo' },
+          etiquetaAgotado(),
+          agotadas.length === 1
+            ? ' 1 material sin existencia'
+            : ` ${agotadas.length} materiales sin existencia`
+        ),
+        h('div', { texto: 'El almacen no los va a poder entregar hoy. Puede enviar el vale de todos modos: si en el rack si hay, el almacen los surte.' }),
+        h('ul', { clase: 'lista-agotados' },
+          agotadas.map((f) => h('li', { texto: `${f.nombre} (${f.sku})` })))
+      ) : null,
       h('div', { clase: 'tabla-envoltura', style: 'max-height:320px;overflow-y:auto' },
         h('table', { clase: 'tabla-compacta' },
           h('thead', {}, h('tr', {},
             h('th', {}, 'Material'), h('th', {}, 'Kit'), h('th', { clase: 'num' }, 'Cantidad'))),
-          h('tbody', {}, filas.map((f) => h('tr', {},
-            h('td', {}, h('div', { clase: 'negrita', texto: f.nombre }), h('div', { clase: 'pequeno silencio', texto: f.sku })),
+          h('tbody', {}, filas.map((f) => h('tr', {
+            clase: f.disponible !== undefined && sinExistencia(f.disponible) ? 'fila-agotada' : ''
+          },
+            h('td', {},
+              h('div', { clase: 'negrita', texto: f.nombre }),
+              h('div', { clase: 'pequeno silencio' },
+                f.sku,
+                f.disponible !== undefined && sinExistencia(f.disponible) ? [' ', etiquetaAgotado()] : null)),
             h('td', { clase: 'pequeno silencio', texto: f.kit || '—' }),
             h('td', { clase: 'num negrita' }, `${numero(f.cantidad)} ${f.unidad}`)
           )))

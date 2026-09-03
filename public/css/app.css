@@ -622,6 +622,12 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 .resultado-meta { font-size: 12.5px; color: var(--texto-2); }
 .resultado-alias { font-size: 12px; color: var(--acento-fuerte); font-style: italic; }
 
+/* Material sin existencia: se dice con la palabra, y la fila se distingue de
+   un vistazo en la revision del vale. Avisa, no bloquea. */
+.lista-agotados { margin: 8px 0 0; padding-left: 20px; font-size: 13px; }
+.lista-agotados li { margin-top: 2px; }
+tr.fila-agotada > td { background: var(--rojo-suave); }
+
 /* Lineas de un vale en edicion */
 .linea-vale {
   display: flex; align-items: center; gap: 12px;

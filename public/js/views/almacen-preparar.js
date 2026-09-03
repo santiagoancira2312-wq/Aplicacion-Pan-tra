@@ -5,7 +5,8 @@
 import { api } from '../api.js';
 import {
   h, vaciar, tarjeta, chip, chipEstado, numero, moneda, fechaHora, cargando,
-  avisoOk, avisoError, modal, pedirTexto, confirmar, cantidades
+  avisoOk, avisoError, modal, pedirTexto, confirmar, cantidades,
+  sinExistencia, etiquetaAgotado
 } from '../ui.js';
 import { icono } from '../iconos.js';
 import { tituloVista, puede } from '../app.js';
@@ -24,6 +25,7 @@ export async function render({ params }) {
     vaciar(contenedor);
 
     const porSurtir = lineas.filter((l) => l.por_surtir > 0);
+    const agotadas = porSurtir.filter((l) => sinExistencia(l.stock_fisico));
     const entregar = new Map(porSurtir.map((l) => [l.id, Math.min(l.por_surtir, l.stock_fisico)]));
 
     // ------------------------------------------------------- Encabezado
@@ -79,6 +81,11 @@ export async function render({ params }) {
     contenedor.appendChild(h('div', { clase: 'tarjeta' },
       h('div', { clase: 'tarjeta-cabecera' },
         h('h2', { texto: 'Lista de surtido' }),
+        // El almacenista tiene que saberlo ANTES de que el trabajador llegue al
+        // mostrador: en cuanto abre el vale, no linea por linea.
+        agotadas.length
+          ? etiquetaAgotado(`${agotadas.length} de ${lineas.length} sin existencia`)
+          : null,
         h('span', { clase: 'pequeno silencio', style: 'margin-left:auto',
           texto: 'Ordenada por ubicacion en el almacen' })
       ),
@@ -91,7 +98,9 @@ export async function render({ params }) {
           h('div', { clase: 'linea-vale-datos', style: 'min-width:200px' },
             h('div', { clase: 'linea-vale-nombre', texto: l.nombre_snapshot }),
             h('div', { clase: 'linea-vale-meta' },
-              `${l.sku_snapshot} · ${l.unidad} · Existencia ${numero(l.stock_fisico ?? 0)}`),
+              sinExistencia(l.stock_fisico)
+                ? [`${l.sku_snapshot} · ${l.unidad} `, etiquetaAgotado()]
+                : `${l.sku_snapshot} · ${l.unidad} · Existencia ${numero(l.stock_fisico ?? 0)}`),
             !l.alcanza && l.por_surtir > 0
               ? h('div', { clase: 'pequeno negrita', style: 'color:var(--rojo)',
                 texto: `Existencia insuficiente: faltan ${numero(l.por_surtir - (l.stock_fisico ?? 0))}` })
