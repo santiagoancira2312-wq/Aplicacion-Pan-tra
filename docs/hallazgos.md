@@ -1,17 +1,17 @@
 # Hallazgos de pruebas
 
-**23 hallazgos: 1 BLOQUEANTE, 9 GRAVES, 10 MENORES y 3 COSMETICOS.**
-El BLOQUEANTE deja el inventario fisico en negativo y se alcanza sin salir de la
-interfaz, con dos clics que un trabajador puede dar por accidente.
-**Mi opinion: NO se puede presentar hasta arreglar el BLOQUEANTE y los hallazgos
-2, 3, 4 y 9.** El resto de la aplicacion aguanto todo lo demas que le hice.
+**Segunda vuelta: los 14 hallazgos que se arreglaron ya NO se reproducen, ninguno
+de ellos volvio por otro lado, y no encontre ninguna regresion en el flujo de
+entregas.** Quedan 9 abiertos (0 bloqueantes, 0 graves, 8 menores y 1 cosmetico)
+mas 1 nuevo que se me habia escapado en la primera vuelta.
+**Mi opinion: ya se puede presentar**, con las tres notas de operacion del final.
 
-Fecha de las pruebas: 2 de septiembre de 2026.
-Version probada: rama `claude/app-testing-hallazgos-5zocds`, base recien
-sembrada con `npm run reset`. `npm test` pasa 14 de 14 antes y despues.
+Fecha: 3 de septiembre de 2026.
+Codigo probado: rama `claude/demo-vales-inventario-wx3qqn`, commits `00489dd`,
+`0211853`, `25a7519` y `8401b4f`. Base recien sembrada con `npm run reset`.
+`npm test` pasa **19 de 19** (5 pruebas nuevas de regresion), antes y despues.
 
-Como leer los comandos: primero hay que guardar la sesion en un archivo de
-cookies. Todos los ejemplos suponen que se hizo esto antes:
+Los comandos suponen esto hecho antes:
 
 ```bash
 API=http://localhost:3000
@@ -23,735 +23,485 @@ curl -s -c alm.jar -X POST $API/api/auth/login-pin -H 'Content-Type: application
   -d '{"employee_id":"ALM-01","pin":"200001"}' > /dev/null
 curl -s -c rsu.jar -X POST $API/api/auth/login-pin -H 'Content-Type: application/json' \
   -d '{"employee_id":"RSU-01","pin":"400010"}' > /dev/null
+curl -s -c admin.jar -X POST $API/api/auth/login -H 'Content-Type: application/json' \
+  -d '{"usuario":"admin@demo.local","password":"Demo.Admin.2026"}' > /dev/null
 ```
 
 ---
 
-# BLOQUEANTE
+# Verificacion de los 14 hallazgos arreglados
 
-## [BLOQUEANTE] 1. El stock fisico queda en NEGATIVO si un vale trae el mismo material en dos lineas
+Repeti el mismo comando de la primera vuelta en cada uno.
 
-**Gravedad:** BLOQUEANTE
-**Rompe:** reglas de negocio 3 y 4
-**Donde:** `server/routes/almacen.js`, endpoint `POST /api/almacen/vales/:id/entregar`
+## 1. Stock fisico negativo — CORREGIDO
 
-La comprobacion de existencia se hace linea por linea contra el stock **leido
-antes** de aplicar ninguna salida (el bucle que arma `aEntregar` corre completo
-antes del bucle que llama a `aplicarMovimiento`). Si dos lineas del mismo vale
-apuntan al mismo material, las dos comparan contra el mismo stock inicial, las
-dos pasan, y las dos se descuentan.
-
-Un vale puede tener el mismo material dos veces sin hacer nada raro: basta con
-agregar un kit y ademas buscar y agregar suelto uno de los materiales de ese
-kit. La interfaz deduplica los materiales sueltos entre si, pero **no** entre un
-kit y un suelto, ni entre dos kits que comparten material.
-
-**Como reproducirlo (solo con la interfaz):**
-
-1. `npm run reset` y entrar como `EMP-001` / PIN `300001`.
-2. Crear vale, Trailer 183.
-3. Agregar el kit **Kit Mini Split** (contiene CLI-0001, existencia 99).
-4. Poner en 99 la cantidad de CLI-0001 dentro del kit, y en 0 las demas lineas
-   del kit (boton de la basura).
-5. En el buscador de materiales, buscar **CLI-0001** y agregarlo suelto, tambien
-   con cantidad 99. Ahora el vale tiene dos lineas del mismo material.
-6. Enviar. Entrar como `SUP-01` / PIN `100001` y aprobar todo.
-7. Entrar como `ALM-01` / PIN `200001`, abrir el vale y **Registrar entrega**
-   completa, firmando.
-8. Ver el material en Inventario.
-
-**Que esperaba:** que la segunda linea se rechace con
-`Stock fisico insuficiente`, igual que pasa cuando son dos vales distintos (eso
-si funciona bien).
-**Que paso:** las dos lineas se entregaron. El material quedo en
-**stock fisico = -99**, disponible -100, semaforo AGOTADO, y se grabaron dos
-movimientos de SALIDA: uno de 99 -> 0 y otro de 0 -> **-99**.
-
-**Comando exacto:**
+Mismo vale de antes: kit con CLI-0001 en 99 mas el mismo material suelto en 99,
+aprobado entero, y las dos lineas entregadas en la misma peticion.
 
 ```bash
-# 1) vale con el kit 1 (todo en 0 salvo CLI-0001=99) MAS el mismo material suelto
-curl -s -b emp.jar -X POST $API/api/vales -H 'Content-Type: application/json' -d '{
-  "trailer_id":4,
-  "items":[{"material_id":33,"cantidad":99}],
-  "kits":[{"kit_id":1,"items":[
-    {"material_id":33,"cantidad":99},{"material_id":34,"cantidad":0},
-    {"material_id":35,"cantidad":0},{"material_id":36,"cantidad":0},
-    {"material_id":2,"cantidad":0},{"material_id":7,"cantidad":0},
-    {"material_id":54,"cantidad":0},{"material_id":51,"cantidad":0}]}]}'
-# devuelve id=201 con items 1114 y 1115, los dos del material 33
-
-# 2) el supervisor aprueba
-curl -s -b sup.jar -X POST $API/api/vales/201/autorizar \
-  -H 'Content-Type: application/json' -d '{"decision":"APROBAR"}'
-
-# 3) el almacen entrega LAS DOS lineas en la misma peticion
-FIRMA="data:image/png;base64,$(python3 -c "print('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='*6)")"
 curl -s -b alm.jar -X POST $API/api/almacen/vales/201/entregar \
   -H 'Content-Type: application/json' -d "{\"receptor_nombre\":\"Kevin Orozco\",\"firma\":\"$FIRMA\",
-  \"lineas\":[{\"vale_item_id\":1114,\"cantidad\":99},{\"vale_item_id\":1115,\"cantidad\":99}]}"
-
-# 4) el resultado
-curl -s -b alm.jar $API/api/materiales/33
-#   "stock_fisico": -99, "disponible": -100, "semaforo": "AGOTADO"
+  \"lineas\":[{\"vale_item_id\":1105,\"cantidad\":99},{\"vale_item_id\":1106,\"cantidad\":99}]}"
 ```
 
-**Por que es lo mas grave:** el producto entero se vende sobre la regla de que el
-fisico nunca es negativo. Ademas se llega por el camino normal, y si pasa en
-vivo el numero negativo queda a la vista en la pantalla de Inventario.
+- Antes: las dos pasaban y el material quedaba en **-99**.
+- Ahora: `409 Stock fisico insuficiente de Mini Split 1 tonelada 220V. Existencia: 98`.
+  El material se quedo en **98**, sin tocar.
 
----
+Probe ademas la variante que no habia probado, la **misma linea repetida dos
+veces en la misma peticion**: `400 No puede entregar mas de lo autorizado
+(pendiente: 0)`, y la linea se quedo en 0 entregadas. Las dos puertas estan
+cerradas.
 
-# GRAVES
+Al terminar toda la bateria: **0 materiales con existencia negativa de 56**.
 
-## [GRAVE] 2. La restriccion de red y el limite de peticiones se saltan con una cabecera
+## 2. X-Forwarded-For — CORREGIDO
 
-**Gravedad:** GRAVE
-**Rompe:** alcance por red (punto 2 del instructivo) y la proteccion del backend
-**Donde:** `server/lib/http.js`, funcion `clientIp()`
-
-`clientIp()` cree lo que diga la cabecera `X-Forwarded-For` sin comprobar si la
-peticion viene de un proxy de confianza. Como durante la demostracion la
-aplicacion va a estar publicada por un tunel, cualquiera que tenga la direccion
-puede poner esa cabecera a mano.
-
-**Como reproducirlo:**
-
-1. Como administrador, en Configuracion, activar la restriccion de red y dejar
-   permitida solo `192.168.50.0/24`.
-2. Intentar entrar como trabajador desde fuera: lo rechaza, correcto.
-3. Repetir el intento agregando `X-Forwarded-For: 192.168.50.9`.
-
-**Que esperaba:** que la restriccion siguiera bloqueando.
-**Que paso:** entro, y ademas pudo crear un vale desde fuera de la planta.
-
-**Comando exacto:**
+Con la restriccion de red encendida y solo `192.168.50.0/24` permitida:
 
 ```bash
-curl -s -b admin.jar -X PUT $API/api/admin/configuracion -H 'Content-Type: application/json' \
-  -d '{"configuracion":{"restriccion_red_activa":"1","redes_permitidas":"192.168.50.0/24"}}'
-
-# sin la cabecera: bloqueado (correcto)
 curl -s -X POST $API/api/auth/login-pin -H 'Content-Type: application/json' \
-  -d '{"employee_id":"EMP-002","pin":"300002"}'
-#   {"error":"Este dispositivo esta fuera de la red autorizada de la planta."}
-
-# con la cabecera: entra
-curl -s -c fuera.jar -X POST $API/api/auth/login-pin -H 'Content-Type: application/json' \
   -H 'X-Forwarded-For: 192.168.50.9' -d '{"employee_id":"EMP-002","pin":"300002"}'
-
-curl -s -b fuera.jar -X POST $API/api/vales -H 'Content-Type: application/json' \
-  -H 'X-Forwarded-For: 192.168.50.9' \
-  -d '{"trailer_id":4,"items":[{"material_id":33,"cantidad":1}]}'
-#   vale creado desde fuera de la red
+#   {"error":"Este dispositivo esta fuera de la red autorizada de la planta."}
 ```
 
-**El mismo agujero tumba el limite de 600 peticiones por minuto.** Lo medi:
-tras 620 peticiones desde la misma IP el servidor ya devolvia 429; enseguida
-mande 30 peticiones mas cambiando `X-Forwarded-For` en cada una y **las 30
-respondieron 200**, mientras la IP real seguia bloqueada.
+Tambien probe una cadena larga (`192.168.50.9, 10.0.0.1, 127.0.0.1`) y las
+cabeceras `X-Real-IP` y `Forwarded`: las cuatro rechazadas. El supervisor si
+sigue entrando desde fuera, como pide el instructivo.
 
-```bash
-for i in $(seq 1 30); do
-  curl -s -o /dev/null -w "%{http_code} " -H "X-Forwarded-For: 10.9.0.$i" $API/api/auth/estado
-done
-# 200 200 200 ... (treinta veces)
-```
+El limite de peticiones tambien quedo cerrado: tras las 620 peticiones que lo
+disparan, mande 30 mas cambiando `X-Forwarded-For` en cada una y **las 30
+respondieron 429** (antes las 30 respondian 200).
 
-Lo que **si** aguanta: el bloqueo por intentos fallidos va contra el usuario, no
-contra la IP, asi que cambiar de cabecera no lo evita. Eso esta bien resuelto.
+**Comprobe ademas que el tunel sigue siendo usable**, que era mi duda con este
+arreglo. Levante un segundo servidor con `PROXIES_CONFIANZA=127.0.0.1`:
 
----
+- trabajador que el tunel reporta dentro de la red -> entra;
+- que reporta fuera -> rechazado;
+- cliente que intenta colar una IP falsa delante de la del tunel
+  (`X-Forwarded-For: 192.168.50.9, 8.8.8.8`) -> rechazado.
 
-## [GRAVE] 3. Un usuario de la empresa externa ve vales y personal de la empresa interna en el buscador
+El recorrido de derecha a izquierda esta bien hecho. Ver la nota de operacion 2.
 
-**Gravedad:** GRAVE
-**Rompe:** alcance por empresa
-**Donde:** `server/routes/catalogo.js`, endpoint `GET /api/buscar`
-
-El buscador global solo filtra por trabajador cuando el rol es TRABAJADOR. No
-aplica en ningun momento el filtro de empresa, ni el de area del supervisor.
-
-**Como reproducirlo (desde la interfaz, con la lupa de arriba):**
-
-1. Entrar como `RSU-01` / PIN `400010` (supervisor de la empresa externa).
-2. En el buscador de la barra superior escribir `PT-2026-0001`.
-3. Escribir despues `Kevin`.
-
-**Que esperaba:** solo resultados de su propia empresa.
-**Que paso:** salen ocho folios de vales de la empresa **interna** con su
-trailer y su estado, y sale la ficha de un trabajador interno con nombre
-completo, numero de empleado, rol y empresa.
-
-**Comando exacto:**
+## 3. Buscador global — CORREGIDO
 
 ```bash
 curl -s -b rsu.jar --get --data-urlencode "q=PT-2026-0001" $API/api/buscar
-#   VALE PT-2026-000198 | Trailer 185 - EN_PREPARACION   (empresa INTERNA)
-#   VALE PT-2026-000199 | Trailer 183 - EN_PREPARACION   ... ocho en total
-
 curl -s -b rsu.jar --get --data-urlencode "q=Kevin" $API/api/buscar
-#   {"tipo":"PERSONA","titulo":"Kevin Orozco Padilla",
-#    "detalle":"EMP-001 - TRABAJADOR (INTERNA)"}
 ```
 
-Al abrir el resultado si da 403, o sea que el detalle esta protegido; lo que se
-filtra es la existencia del vale, su folio, su trailer, su estado y los nombres
-del personal interno. Un supervisor interno tambien ve por aqui folios de areas
-que no son la suya.
+- Folios: los 8 que ve `RSU-01` son **todos REYNA** (antes eran todos internos).
+  Lo comprobe cruzando cada folio con su empresa desde la sesion de administrador.
+- Personas: `[]`. Antes salia `Kevin Orozco Padilla — EMP-001 - TRABAJADOR (INTERNA)`.
+- `SUP-01` ve 8 folios y **los 8 son de su area**. `EMP-001` ve 4 y **los 4 son
+  suyos**. El catalogo de materiales lo siguen viendo los dos, que es lo correcto
+  porque el almacen es compartido.
 
----
-
-## [GRAVE] 4. El panel ejecutivo esta abierto a cualquiera que escriba la direccion, y no filtra por empresa
-
-**Gravedad:** GRAVE
-**Rompe:** alcance por rol y alcance por empresa
-**Donde:** `server/routes/dashboard.js`, endpoint `GET /api/dashboard`
-
-El endpoint solo pide sesion iniciada: no comprueba el permiso `dashboard.leer`
-ni filtra por empresa. Oculta los importes a quien no tiene permiso de costos,
-pero deja pasar todo lo demas.
-
-**Como reproducirlo (desde el navegador):**
-
-1. Entrar como `EMP-001` / PIN `300001`. En su menu no hay panel ejecutivo.
-2. Escribir a mano en la barra de direcciones `http://localhost:3000/panel`.
-
-**Que esperaba:** "no tiene permiso", como pasa correctamente con
-`/inventario`, `/auditoria`, `/usuarios` o `/configuracion`.
-**Que paso:** se pinta el panel ejecutivo completo: vales de hoy, pendientes de
-autorizar, en almacen, entregas parciales, materiales bajo minimo, trailers
-activos, la grafica de tendencia de 30 dias, el reparto de vales por estado, el
-top 10 de materiales y el consumo por area. Lo verifique en el navegador y
-tengo la captura.
-
-Con un usuario de la empresa externa pasa lo mismo y ademas cruza empresas:
+## 4. Panel ejecutivo — CORREGIDO
 
 ```bash
-curl -s -b rsu.jar $API/api/dashboard
-#   vales_total: 205  <- de las dos empresas
-#   actividad: [... "trabajador":"Laura Zamora Rendon","empresa":"INTERNA" ...]
-
-curl -s -b rna.jar $API/api/dashboard   # RNA-001, trabajador externo
-#   los mismos KPI de toda la operacion interna
+for j in emp sup alm rsu rna; do curl -s -b $j.jar $API/api/dashboard; done
 ```
 
----
+Los cinco reciben `403`. `EMP-001`, `SUP-01`, `ALM-01`, `RSU-01` y `RNA-001`:
+`Su rol no tiene el permiso: dashboard.leer`. En el navegador, escribir
+`localhost:3000/panel` como trabajador ya no pinta nada. `ADMIN` y `DIRECCION`
+lo siguen viendo completo, con importes.
 
-## [GRAVE] 5. El supervisor recibe importes en pesos aunque no tenga permiso de costos
-
-**Gravedad:** GRAVE
-**Rompe:** "quien no tiene permiso de costos no debe ver costos en ninguna respuesta, ni siquiera escondidos en el JSON"
-**Donde:** `server/routes/analitica.js`, endpoint `GET /api/analitica/kits`
-
-El endpoint deja pasar a quien tenga `analitica.leer` **o** `analitica.area`
-(el supervisor tiene la segunda), pero luego devuelve `costo_estandar`,
-`costo_real` y `variacion_costo` sin comprobar `puedeVerCostos`. Todos los demas
-endpoints si limpian los costos correctamente; este se quedo fuera.
-
-**Como reproducirlo:**
+## 5. Costos en la analitica de kits — CORREGIDO
 
 ```bash
-curl -s -b sup.jar $API/api/auth/me    # permisos: NO incluye costos.leer
 curl -s -b sup.jar $API/api/analitica/kits
-#   {"kit":"Kit Electrico",
-#    "costo_estandar":43193.115,"costo_real":41842.877,"variacion_costo":-1350.24}
 ```
 
-**Que esperaba:** que esos tres campos no vinieran en la respuesta.
-**Que paso:** vienen con el importe exacto en pesos.
+Los campos `costo_estandar`, `costo_real` y `variacion_costo` **ya no vienen** en
+la respuesta del supervisor (antes traian $43,193.11 y $41,842.87). `DIRECCION`,
+que si tiene `costos.leer`, los sigue recibiendo.
 
----
-
-## [GRAVE] 6. El consumo por area mezcla las dos empresas y no pide ningun permiso
-
-**Gravedad:** GRAVE
-**Rompe:** alcance por empresa
-**Donde:** `server/routes/analitica.js`, endpoint `GET /api/analitica/area`
-
-Filtra por area pero nunca por empresa, y solo pide sesion iniciada.
-
-**Como reproducirlo:**
+## 6. Analitica por area — CORREGIDO
 
 ```bash
 curl -s -b rsu.jar $API/api/analitica/area
-#   area: "Acabados", vales.total: 71
-
-# cuantos de esos 71 son de su empresa, segun el administrador:
-curl -s -b admin.jar "$API/api/vales?area_id=7&limit=1"                 # total 71
-curl -s -b admin.jar "$API/api/vales?area_id=7&empresa=REYNA&limit=1"   # total 36
 ```
 
-**Que esperaba:** 36, solo lo de su empresa.
-**Que paso:** 71, incluidos los 35 vales internos, mas los 25 materiales mas
-consumidos del area sumando las dos empresas.
+`RSU-01` ve **33 vales**, que son exactamente los de REYNA en el area 7 (lo
+verifique con `?area_id=7&empresa=REYNA` desde administracion). Antes veia 67,
+los de las dos empresas. Ademas ya pide permiso: `EMP-001` recibe `403`.
 
----
-
-## [GRAVE] 7. La empresa externa puede exportar a Excel informacion de la empresa interna
-
-**Gravedad:** GRAVE
-**Rompe:** alcance por empresa
-**Donde:** `server/routes/exportar.js`
-
-El filtro de empresa es `filas.filter((f) => f.Empresa === undefined || f.Empresa === 'REYNA')`.
-Los reportes que **no tienen columna Empresa** se salvan enteros del filtro.
-
-**Como reproducirlo:**
+## 7. Exportaciones — CORREGIDO
 
 ```bash
 curl -s -b rsu.jar $API/api/exportar
-#   {"reportes":["inventario","consumo_trailer","consumo_area","kits","alertas"]}
-
 curl -s -b rsu.jar $API/api/exportar/consumo_trailer
-#   Trailer,Cliente,Modelo,Estado,Vales,Piezas netas
-#   183,Cliente Demo Delta,Food Truck Premium,EN_PROCESO,23,1144.41
-#   182,Cliente Demo Gamma,Food Truck Estandar,TERMINADO,22,1046.4
-#   ...
-
-curl -s -b rsu.jar $API/api/exportar/consumo_area
-#   Area,Vales
-#   Electricidad,28
-#   Plomeria,32 ...
 ```
 
-**Que esperaba:** que solo pudiera bajar informacion de su empresa.
-**Que paso:** se lleva en un archivo de Excel el nombre de cliente, el modelo,
-el estado y el consumo de cada trailer de la empresa interna, mas el consumo de
-todas las areas, mas el inventario completo. Los importes si se los quita el
-filtro de costos, pero el resto sale entero.
+- La lista de reportes que se le ofrece a `RSU-01` ahora es `[]`.
+- `consumo_trailer`, `consumo_area`, `inventario`, `kits` y `alertas` devuelven
+  los cinco `403 Ese reporte contiene informacion de la empresa interna`.
 
----
+Antes bajaba en un CSV el cliente, el modelo y el consumo de cada trailer interno.
 
-## [GRAVE] 8. Una entrada de almacen admite cantidades absurdas y costos negativos, sin ningun aviso
-
-**Gravedad:** GRAVE
-**Donde:** `server/routes/inventario.js`, endpoint `POST /api/entradas`
-
-La cantidad solo se valida `> 0` (sin techo) y el costo no se valida en
-absoluto. En la interfaz los campos tienen `min` pero al leerse con
-`Number(valor) || 0` en el evento `change`, el `min` no frena nada.
-
-**Como reproducirlo (todo desde la interfaz):**
-
-1. Entrar como `ALM-01` / PIN `200001` y abrir **Entradas**.
-2. **Registrar entrada**, buscar `Silicon` y agregar ACA-0001 (existencia 2,655).
-3. Escribir cantidad `100000` y costo unitario `-500`.
-4. **Registrar entrada**.
-
-**Que esperaba:** que rechazara el costo negativo y que al menos pidiera
-confirmacion por una cantidad cuarenta veces mayor a la existencia.
-**Que paso:** "Entrada ENT-2026-00009 registrada", sin una sola advertencia.
-El material paso de 2,655 a **102,655** piezas y su valor de inventario de
-**$254,880 a $9,854,880**. En movimientos quedo grabado un importe de
-**-$50,000,000**:
-
-```
-tipo=ENTRADA cantidad=100000 precio_unitario=-500 importe=-50000000
-stock_antes=2655 stock_despues=102655
-```
-
-Si esto pasa durante la demostracion, el panel ejecutivo y el valor de
-inventario quedan con numeros imposibles delante del cliente y no hay forma de
-deshacerlo desde la interfaz.
-
-Lo que **si** esta bien: los ajustes negativos si comprueban la existencia
-(`No puede descontar mas de la existencia actual`), y las cantidades negativas o
-de texto en los vales si se rechazan.
-
----
-
-## [GRAVE] 9. Con la notificacion en vivo el vale NO aparece en la lista de Autorizaciones sin recargar
-
-**Gravedad:** GRAVE
-**Donde:** `public/js/app.js`, funcion `consultarNotificaciones()`
-**Es el paso 3 del recorrido de la demostracion.**
-
-La consulta cada 10 segundos si funciona: pinta el aviso, suena, vibra y
-enciende el punto rojo. Pero **solo toca la campana**; nunca vuelve a pintar la
-vista que se esta viendo. El supervisor recibe el aviso de un vale que no puede
-ver hasta que recarga.
-
-**Como reproducirlo:**
-
-1. Navegador A: entrar como `SUP-01` / PIN `100001` y quedarse en
-   **Autorizaciones**.
-2. Navegador B: entrar como `EMP-001` / PIN `300001` y crear un vale cualquiera.
-3. Esperar sin tocar nada en el navegador A.
-
-**Que esperaba:** que apareciera el vale en la lista, como dice el instructivo.
-**Que paso:** medido en el navegador, muestreando cada 6 segundos durante 30:
-
-```
-t+6s   avisos=[]                                                  vale visible=false
-t+12s  avisos=["Nueva solicitud pendiente: Kevin Orozco Padilla
-                creo el vale PT-2026-000204. Tra..."]             vale visible=false
-t+18s  (igual)                                                    vale visible=false
-t+24s  (igual)                                                    vale visible=false
-t+30s  (igual)                                                    vale visible=false
-peticiones a /api/notificaciones: 21:51:09, 21:51:19, 21:51:29, 21:51:39
-```
-
-Al pulsar recargar, el vale aparece de inmediato. El punto rojo tambien se
-comprobo por separado y **si** funciona bien: pasa a `campana-punto oculto`
-despues de marcar todo leido y vuelve a `campana-punto` visible en la siguiente
-consulta despues del vale nuevo.
-
-Es un hallazgo de demostracion: el guion dice "debe aparecer el vale" y no
-aparece. Se ve raro que suene el aviso y la pantalla se quede igual.
-
----
-
-## [GRAVE] 10. El contador que aparece junto a "Autorizaciones" no cuenta vales pendientes
-
-**Gravedad:** GRAVE (se ve en la demostracion, en el menu, todo el tiempo)
-**Donde:** `public/js/app.js`, `menu()` -> `{ ..., badge: 'pendientes' }`
-
-Ese `pendientes` es `estado.pendientes`, que son **notificaciones sin leer**, no
-vales pendientes de autorizar.
-
-**Como reproducirlo:**
-
-1. Entrar como `SUP-01`, abrir la campana y marcar todo como leido.
-2. Que un trabajador cree **un** vale, y esperar la consulta de 10 segundos.
-3. Mirar el menu lateral y luego abrir Autorizaciones.
-
-**Que esperaba:** el mismo numero en los dos lados.
-**Que paso:** el menu decia **Autorizaciones 1** mientras la pantalla decia
-**Pendientes 5**. Si el supervisor abre la campana antes de la demostracion, el
-menu se queda en 0 aunque tenga vales esperando.
-
----
-
-# MENORES
-
-## [MENOR] 11. Un costo no numerico en una entrada tira un error 500
-
-**Donde:** `server/routes/inventario.js` linea 140
+## 8. Entradas de almacen — CORREGIDO
 
 ```bash
 curl -s -b alm.jar -X POST $API/api/entradas -H 'Content-Type: application/json' \
-  -d '{"items":[{"material_id":51,"cantidad":1,"costo":"abc"}]}'
-#   {"error":"Error interno del servidor"}
+  -d '{"items":[{"material_id":51,"cantidad":100000,"costo":-500}]}'
 ```
 
-En la Terminal queda `NOT NULL constraint failed: entrada_items.costo`. La
-transaccion revierte bien y no queda basura en la base, y el mensaje al usuario
-no filtra nada; pero deberia ser un 400 con un mensaje claro. Solo se alcanza
-por la API, la interfaz siempre manda un numero.
+| Lo que mande | Respuesta |
+|---|---|
+| cantidad 100000 + costo -500 | 400 `Costo no valido: no puede ser negativo ni quedar vacio` |
+| solo costo negativo | 400, mismo mensaje |
+| costo con letras | 400 (antes era un **500**, o sea que el hallazgo 11 tambien quedo cerrado) |
+| cantidad 1e14 | 400 `demasiado alta (maximo 1000000 por linea). Revise si sobra un cero.` |
+| cantidad 0 | 400 `Cantidad no valida` |
+| costo 99999999999 | 400 `demasiado alto (maximo 10000000 por unidad)` |
+| **entrada normal, 10 piezas a 96** | **200, ENT-2026-00009** |
 
-## [MENOR] 12. No se puede cambiar solo el costo de un material por la API
+El material paso de 2,682 a 2,692: solo entro la entrada legitima. Los mensajes
+estan escritos para una persona, no para un programador. Los ajustes de
+inventario, que no se tocaron, siguen bien.
 
-**Donde:** `server/routes/catalogo.js`, `PUT /api/materiales/:id`
+## 9. El vale aparece solo en Autorizaciones — CORREGIDO
 
-`sentenciaActualizacion` se llama con una lista de campos que **no incluye**
-`costo`, asi que si el cuerpo solo trae `costo` la funcion lanza
-`No se recibio ningun cambio` antes de llegar al bloque que si versiona el costo.
+Con `SUP-01` parado en Autorizaciones y un vale creado desde otro navegador,
+muestreando cada 6 segundos:
+
+```
+t+6s   aviso="Nueva solicitud pendiente: Kevin Orozco Padilla creo el vale"
+       punto=ENCENDIDO  menu=1  Pendientes=1  EL VALE ESTA EN LA LISTA=true
+```
+
+Antes se quedaba en `false` a los 24 segundos y solo aparecia al recargar. Ahora
+llega en la primera consulta: suena, vibra, enciende el punto y **el vale entra
+en la lista**.
+
+## 10. El numero del menu — CORREGIDO
+
+Ahora cuenta vales pendientes, no notificaciones sin leer. Lo comprobe con el
+caso que lo rompia: marcar todo como leido en la campana. Antes el menu se
+quedaba en 0 con 5 vales esperando; ahora menu y pantalla dicen lo mismo (1 y 1).
+
+## 17. Catalogos sin permiso — CORREGIDO
 
 ```bash
-curl -s -b admin.jar -X PUT $API/api/materiales/51 -H 'Content-Type: application/json' \
-  -d '{"costo":999,"motivo":"prueba"}'
-#   {"error":"No se recibio ningun cambio"}
+curl -s -b emp.jar $API/api/proveedores
+#   {"error":"Su rol (TRABAJADOR) no tiene el permiso: inventario.leer"}
 ```
 
-Desde la interfaz no se nota porque el formulario manda siempre todos los
-campos. Mandando el objeto completo el precio historico si funciona: cambie el
-costo de 96 a 999 y la linea ya entregada conservo 96 en `precio_unitario`, en
-`importe` y en el movimiento de salida.
+Proveedores, que era el que llevaba contacto, telefono y correo, ahora pide
+`inventario.leer`. `unidades`, `categorias` y `areas` pasan a pedir
+`catalogo.leer`; el trabajador los sigue viendo porque **si** tiene ese permiso y
+los necesita para pintar la pantalla de crear vale. Los cuatro comprueban
+permiso, que era el fondo del hallazgo. `ALM-01` sigue viendo proveedores.
 
-## [MENOR] 13. Con una sesion abierta se puede reemplazar el segundo factor del administrador sin la contrasena
+## 18. Lista de surtido sin alcance — CORREGIDO
 
-**Donde:** `server/routes/auth.js`, `POST /api/auth/2fa/iniciar`
+`GET /api/almacen/vales/:id/preparacion` ya pasa el usuario a `detalleVale` en
+vez de `null`. El almacen sigue viendo sus lineas y sus costos con normalidad
+(`200`, 2 lineas, precios visibles).
 
-`2fa/iniciar` sobreescribe `twofa_secret` con solo tener sesion: no pide la
-contrasena y no deja registro en auditoria. Si el 2FA ya estaba activo,
-`twofa_enabled` se queda en 1 pero con el secreto nuevo, asi que el codigo del
-telefono del administrador legitimo deja de servir de inmediato.
+## 21. Pestañas en telefono — CORREGIDO
 
-**Como reproducirlo:** con una sesion de administrador abierta (un equipo sin
-bloquear), llamar `POST /api/auth/2fa/iniciar` y quedarse con el `secret` que
-devuelve. Medido:
+La tira ahora vive en un `.pestanas-caja` con dos flechas y una mascara que
+degrada el borde. Medido a 390 px: la caja lleva la clase `mas-derecha`, hay 2
+flechas, y al tocar la de la derecha el `scrollLeft` pasa de 0 a **256**. Ya se
+ve que hay mas pestañas y se llega a ellas sin adivinar.
 
-```
-login con el codigo LEGITIMO  -> {"error":"Codigo de verificacion incorrecto"}
-login con el codigo del nuevo -> entra
-auditoria: no hay ningun registro de la llamada a 2fa/iniciar
-```
+## 23. Alto de la pantalla de crear vale — CORREGIDO
 
-Deberia pedir la contrasena, igual que hace `2fa/desactivar`, y quedar auditado.
+Con el Kit Electrico (9 materiales) en iPhone: **2,296 px**, antes ~5,000. El
+boton REVISAR Y ENVIAR queda a 711 px, **visible sin hacer scroll** en una
+pantalla de 844.
 
-## [MENOR] 14. Los motivos y el nombre de cliente no tienen limite de longitud
+---
 
-Las notas del vale si se recortan a 500 caracteres, pero `motivo` y
-`motivo_cierre` no se recortan en ningun lado, y `trailers.cliente` tampoco.
-Guarde 5,000 caracteres en los dos:
+# Busqueda de regresiones en el flujo de entregas
 
-```bash
-LARGO=$(python3 -c "print('A'*5000)")
-curl -s -b emp.jar -X POST $API/api/vales/207/cancelar \
-  -H 'Content-Type: application/json' -d "{\"motivo\":\"$LARGO\"}"   # {"ok":true}
-```
+Es lo que mas se toco, asi que lo apreté aparte.
 
-Se guardan los 5,000 y luego se pintan enteros en el detalle del vale y en la
-lista de trailers. No rompe nada, pero desarma la pantalla.
+**Nada se rompio.** El detalle:
 
-## [MENOR] 15. Se aceptan cantidades absurdas en un vale
+- **Entrega normal, una linea**: `PARCIAL` / `ENTREGA_PARCIAL`, precio congelado
+  correcto, inventario baja exactamente lo entregado (13,811.12 -> 13,810.12).
+- **Entrega parcial y despues completar**: el vale pasa por `ENTREGA_PARCIAL` con
+  su pendiente (57) y llega a `ENTREGADO`.
+- **Entrega desde el navegador, en telefono, firmando con el dedo**: dibuje el
+  trazo con eventos de puntero reales (4,338 pixeles pintados), salio
+  `Entrega registrada. Inventario actualizado.`, el vale quedo `ENTREGADO`, las
+  cuatro cantidades correctas (SOLICITADO 3 / AUTORIZADO 1 / ENTREGADO 1) y la
+  firma quedo guardada y se ve en el detalle del vale.
+- **Entregar mas de lo autorizado**: sigue rechazando con el pendiente correcto.
+- **Entregar negativo, firma corta, sin receptor, sin lineas**: los cuatro
+  rechazados.
+- **Reutilizar una firma**: sigue rechazando.
+- **Doble clic en entregar** (dos peticiones a la vez): la primera entrega, la
+  segunda `409`. Entregado 4 de 4, no 8.
+- **Doble clic en entregar con la red lenta a proposito** (1.2 s por peticion,
+  dos clics separados 400 ms): una sola entrega registrada, inventario baja 4 y
+  no 8. Ver el hallazgo 19 por el mensaje rojo que sale despues.
+- **Carrera entre dos vales distintos por el mismo material**: uno pasa, el otro
+  `409`, stock final 0 y nunca negativo.
+- **Cerrar pendiente y luego entregar**: rechazado por estado.
+- **La ventana de entrega no se cierra sola** cuando llega una notificacion a
+  media firma (ver abajo).
+
+**Regresion que busque a proposito y no ocurre:** el refresco automatico nuevo
+podria haber borrado una ventana abierta. Lo probe: con el supervisor a media
+decision, un recorte ya tecleado en el campo, y un vale nuevo llegando desde otro
+navegador, esperé 14 segundos. La ventana **siguio abierta**, el `1` que habia
+tecleado **seguia ahi**, y en cuanto decidio, el refresco pendiente entro y el
+vale nuevo aparecio. Bien resuelto.
+
+---
+
+# Hallazgos que siguen abiertos
+
+Ninguno de estos estaba en la lista de arreglados. Renumerados; entre parentesis
+el numero que tenian en la primera vuelta.
+
+## [MENOR] 11 (nuevo). Un doble toque en ENVIAR VALE crea dos vales
+
+**Donde:** `public/js/views/vale-nuevo.js`, la accion `ENVIAR VALE` del modal
+
+El boton no se desactiva mientras la peticion viaja, y la ventana solo se cierra
+cuando ya llego la respuesta. Con la red rapida no se nota porque la respuesta
+vuelve en 20 ms; con la red de una planta o el tunel de la demostracion, si.
+
+**Como reproducirlo:** con la peticion tardando ~1 s, crear un vale y tocar
+**ENVIAR VALE** dos veces con 400 ms de separacion.
+
+**Que esperaba:** que el segundo toque no hiciera nada.
+**Que paso:** dos vales, `PT-2026-000223` y `PT-2026-000224`, con el mismo
+contenido. A los 400 ms el boton seguia en pantalla y **sin desactivar**. El
+supervisor se encuentra dos solicitudes iguales que tiene que resolver por
+separado.
+
+Es de la primera vuelta, no lo introdujeron los arreglos: en la primera pase por
+ese boton una sola vez y no lo cace. Autorizar y entregar **no** tienen el
+problema porque el servidor rechaza el segundo intento por estado; crear un vale
+no puede protegerse asi, porque cada peticion es un vale legitimo. El arreglo va
+en el navegador: desactivar el boton en cuanto se toca.
+
+## [MENOR] 12 (era 15). Cantidades absurdas en un vale
 
 ```bash
 curl -s -b emp.jar -X POST $API/api/vales -H 'Content-Type: application/json' \
   -d '{"trailer_id":4,"items":[{"material_id":33,"cantidad":1e15}]}'
-#   vale creado con cantidad_solicitada = 1000000000000000
+#   se crea con cantidad_solicitada = 1000000000000000
 ```
 
-Si el supervisor lo autoriza, el comprometido de ese material se va a
-1e15 y el disponible del inventario queda en un numero ilegible. Los negativos,
-los textos e `Infinity` si se rechazan correctamente.
+Las entradas ya tienen tope (`MAX_CANTIDAD_MOVIMIENTO`); los vales no. Si el
+supervisor lo autoriza, el comprometido de ese material se dispara y el
+disponible del inventario queda ilegible. Lo natural seria usar el mismo tope.
 
-## [MENOR] 16. La cookie de sesion sale sin `Secure`
-
-En el demo `SECURE_COOKIES` esta apagado, asi que la cabecera es:
-
-```
-Set-Cookie: dv_session=...; Path=/; HttpOnly; SameSite=Lax; Max-Age=28800
-```
-
-`HttpOnly` y `SameSite` estan bien, y en la base solo se guarda el sha256 del
-token (lo comprobe). Pero como la demostracion va a salir por un tunel con
-HTTPS, conviene levantar el servidor con `SECURE_COOKIES=1` ese dia. Lo anoto
-como recordatorio de operacion, no como error de codigo.
-
-## [MENOR] 17. Cuatro catalogos se leen sin comprobar permiso
-
-**Donde:** `server/routes/catalogo.js`, el bucle que registra
-`/api/unidades`, `/api/categorias`, `/api/proveedores` y `/api/areas`
-
-Los `GET` solo llaman `requireUser(ctx)`. Un trabajador puede listar la tabla de
-proveedores completa con contacto, telefono y correo:
+## [MENOR] 13 (era 12). No se puede cambiar solo el costo de un material por la API
 
 ```bash
-curl -s -b emp.jar $API/api/proveedores
+curl -s -b admin.jar -X PUT $API/api/materiales/51 -H 'Content-Type: application/json' \
+  -d '{"costo":123,"motivo":"x"}'
+#   {"error":"No se recibio ningun cambio"}
 ```
 
-Los `POST` y `PUT` si piden `catalogo.escribir` correctamente.
+Desde la interfaz no se nota, porque el formulario manda todos los campos.
 
-## [MENOR] 18. La lista de surtido se arma sin comprobar alcance (riesgo latente)
+## [MENOR] 14 (era 13). Se puede reemplazar el 2FA del administrador sin la contrasena
 
-**Donde:** `server/routes/almacen.js`,
-`GET /api/almacen/vales/:id/preparacion` llama `detalleVale(valeId, null)`.
+`POST /api/auth/2fa/iniciar` sobreescribe el secreto con solo tener sesion
+abierta, no pide contrasena y no queda en auditoria. Lo volvi a comprobar: tras
+llamarlo, el codigo del telefono del administrador legitimo deja de servir y
+sirve el nuevo. Deberia pedir contrasena, como si hace `2fa/desactivar`.
 
-Con `null` como usuario, `detalleVale` se salta las comprobaciones de rol, de
-area y de empresa, y ademas devuelve los costos siempre. Hoy **no es
-explotable** porque los tres usuarios de almacen del demo son de la empresa
-interna y ningun usuario externo tiene `vales.preparar`. Pero el dia que exista
-un almacenista de la empresa externa, ese endpoint le va a entregar cualquier
-vale interno. Lo anoto para que se cierre junto con los demas de alcance.
+## [MENOR] 15 (era 14). Motivos y nombre de cliente sin limite de longitud
 
-## [MENOR] 19. Se puede registrar una devolucion contra un vale ya cerrado
+Las notas del vale si se recortan a 500. `motivo`, `motivo_cierre` y
+`trailers.cliente` no: guarde 5,000 caracteres en los tres y se pintan enteros.
 
-**Donde:** `server/routes/almacen.js`, `POST /api/almacen/vales/:id/devolucion`
+## [MENOR] 16 (era 16). La cookie sale sin `Secure`
 
-A diferencia de la entrega, la devolucion no comprueba el estado del vale. Sobre
-un vale en estado `CERRADO` la acepto y sumo el material al inventario. Puede
-que sea el comportamiento deseado (devolver despues de cerrar es realista), pero
-hoy no esta decidido a proposito ni documentado, y el vale cerrado no vuelve a
-abrirse ni cambia de estado.
+```
+Set-Cookie: dv_session=***; Path=/; HttpOnly; SameSite=Lax; Max-Age=28800
+```
 
-Todo lo demas de la regla 11 esta bien: no se puede devolver mas de lo
-entregado, hace falta motivo, y ni el trabajador ni el supervisor pueden
-registrar devoluciones.
+`HttpOnly` y `SameSite` estan bien y en la base solo se guarda el sha256 del
+token (verificado otra vez). Es nota de operacion para el dia del tunel.
 
-## [MENOR] 20. En la pantalla de acceso, los digitos escritos en cualquier lado entran al PIN
+## [MENOR] 17 (era 19). Se puede devolver contra un vale ya cerrado
 
-**Donde:** `public/js/views/acceso.js`, `document.onkeydown`
+La devolucion no comprueba el estado del vale, a diferencia de la entrega. Sobre
+un vale `CERRADO` la acepta y suma el material al inventario. Puede ser
+deliberado, pero hoy no esta escrito en ningun lado y el vale no cambia de estado.
 
-El manejador esta puesto en el documento, no en el campo. Si alguien escribe el
-numero de empleado y toca un digito con el foco fuera del campo, el digito se va
-al PIN sin que se vea donde. Con seis digitos el formulario se envia solo. En un
-iPad compartido con teclado es facil que pase.
+## [MENOR] 18 (era 20). Los digitos escritos fuera del campo entran al PIN
 
----
+`document.onkeydown` en `public/js/views/acceso.js` esta puesto en el documento,
+no en el campo.
 
-# COSMETICOS
+## [MENOR] 19 (nuevo, menor). Un aviso rojo despues de una entrega que si funciono
 
-## [COSMETICO] 21. En telefono se ven tres pestañas y hay seis
+Consecuencia del hallazgo 11 en la pantalla de entregas. El segundo clic recibe
+`409` y se pinta en rojo `El vale no esta en condiciones de entrega (estado:
+ENTREGADO)` **encima de la entrega que acaba de salir bien**. El inventario queda
+correcto, pero el almacenista ve un error donde no lo hubo. Se arregla solo si se
+desactiva el boton al primer toque.
 
-En **Mis vales** a 390 px de ancho se ven "Todos", "Pendientes" y "Aprobados";
-"Preparados", "Entregados" y "Rechazados" quedan fuera. La tira **si** se
-desplaza (`overflow-x: auto`, ancho real 802 px sobre 366 visibles), asi que no
-esta rota, pero no hay ninguna señal de que haya mas a la derecha. Falta un
-degradado o una flecha en el borde.
+## [COSMETICO] 20 (era 22). Nombres de material en tres renglones en telefono
 
-## [COSMETICO] 22. Los nombres de material se parten en tres renglones en telefono
-
-En la pantalla de crear vale, a 390 px, "Cable THW calibre 12 negro" y
-"Contacto duplex polarizado 15A" ocupan tres renglones cada uno porque la
-columna del nombre queda muy angosta al lado de los botones de cantidad. Se lee,
-pero la lista se ve apretada.
-
-## [COSMETICO] 23. La pantalla de crear vale mide casi 5,000 px de alto con un kit
-
-Con el Kit Electrico (9 materiales) agregado, la pagina en iPhone mide unos
-5,000 px y el boton **REVISAR Y ENVIAR** queda hasta abajo. Hay que hacer
-bastante scroll. Cronometre el paso 2 completo (entrar, elegir trailer, agregar
-kit, ajustar una cantidad, revisar y enviar): **5.5 segundos** con automatizacion,
-o sea que el objetivo de menos de un minuto se cumple de sobra con una persona;
-es solo comodidad.
+En crear vale, a 390 px, "Cable THW calibre 12 negro" y "Contacto duplex
+polarizado 15A" ocupan tres renglones. Se lee; se ve apretado.
 
 ---
 
 # Probado y sin hallazgos
 
-Todo esto lo intente romper a proposito y aguanto.
+## Las doce reglas
 
-**Reglas de negocio**
+- **R1** las cuatro cantidades: se conservan. En pantalla, ESTANDAR 77 /
+  SOLICITADO 3 / AUTORIZADO 1 / ENTREGADO 1 en la misma linea.
+- **R2** autorizar 50 sobre 3 -> rechazado; negativo -> rechazado; inyectar
+  `cantidad_solicitada: 99` en la autorizacion **no** cambia la solicitada (se
+  quedo en 3); doble autorizacion -> `409`.
+- **R3** el inventario solo baja al entregar, y nunca queda negativo por ninguna
+  via: entregas, entregas repetidas, ajustes, devoluciones ni entradas.
+- **R4** ver la seccion de entregas: todas las puertas cerradas.
+- **R5** entrega parcial: el vale queda abierto con su pendiente y se completa
+  despues.
+- **R6** precio historico: cambie el costo de 18.5 a 9,999 despues de entregar;
+  la linea y el movimiento conservaron 18.5.
+- **R7** kits versionados: cree la version 3 del Kit Electrico; el vale hecho con
+  la 2 conservo `version_snapshot = 2` y sus 9 lineas.
+- **R8** ajustar una cantidad en un vale no toco el kit maestro (comparado entero,
+  antes y despues).
+- **R9** el vale guarda SKU y nombre oficial (`ELE-0001` / `Cable THW calibre 12
+  negro`).
+- **R10** 1.77 en PZA -> 2; 0.4 -> rechazado; negativo, texto e `Infinity`
+  rechazados.
+- **R11** devoluciones: solo el almacen y el administrador; nunca mas de lo
+  entregado; siempre con motivo; la devolucion valida devuelve el material al
+  inventario.
+- **R12** auditoria: 19 acciones distintas registradas con usuario, fecha, valor
+  anterior, valor nuevo, motivo e IP. No existe ningun `DELETE` de vales,
+  materiales ni auditoria.
 
-- Regla 1, las cuatro cantidades: se conservan siempre. En pantalla se ven
-  ESTANDAR 75 / SOLICITADO 3 / AUTORIZADO 1 / ENTREGADO 1 en la misma linea.
-- Regla 2, autorizar de mas: `cantidad_autorizada: 50` sobre 5 solicitadas ->
-  `No puede autorizar mas de lo solicitado`. Negativo -> `Cantidad no valida`.
-  Mandar `cantidad_solicitada: 99` en el cuerpo de la autorizacion **no** cambia
-  la solicitada: se quedo en 5.
-- Regla 4, entregar de mas: 40 sobre 2 autorizadas -> `No puede entregar mas de
-  lo autorizado (pendiente: 2)`. Negativo -> rechazado. **Con vales distintos**
-  el control de existencia si funciona (ver el BLOQUEANTE, que es el caso de dos
-  lineas del mismo vale).
-- Regla 5, entrega parcial: el vale queda en ENTREGA_PARCIAL con su pendiente
-  correcto y se puede seguir surtiendo despues.
-- Regla 6, precio historico: cambie el costo de ACA-0001 de 96 a 999 despues de
-  entregar; la linea, el importe y el movimiento conservaron 96.
-- Regla 7, kits versionados: cree la version 3 del Kit Electrico despues de un
-  vale hecho con la version 2; el vale conservo `version_snapshot = 2` y sus 9
-  lineas intactas.
-- Regla 8, kit maestro: ajustar una cantidad dentro de un vale no toco el kit
-  maestro (compare el kit completo antes y despues, identico).
-- Regla 9, catalogo cerrado: el vale guarda `sku_snapshot` y `nombre_snapshot`;
-  no hay forma de escribir el nombre a mano.
-- Regla 10, unidades: `1.77` en una unidad PZA se ajusta a `2`, y `0.4` se
-  rechaza con `debe ser mayor a cero`.
-- Regla 11, devoluciones: solo el almacen (y el administrador) pueden; nunca mas
-  de lo entregado; siempre con motivo.
-- Regla 12, auditoria: quedan registrados LOGIN, LOGIN_PIN, LOGOUT,
-  VALE_CREADO, VALE_AUTORIZADO, VALE_RECHAZADO, VALE_EN_PREPARACION,
-  VALE_PREPARADO, ENTREGA_REGISTRADA, DEVOLUCION_REGISTRADA, VALE_CERRADO,
-  VALE_CANCELADO, ENTRADA_REGISTRADA, INVENTARIO_*, MATERIAL_*, KIT_*,
-  TRAILER_*, USUARIO_*, CONFIGURACION_MODIFICADA, EXPORTACION, 2FA_*,
-  SESION_REVOCADA (15 acciones distintas presentes en la base tras mis pruebas),
-  con usuario, fecha, valor anterior, valor nuevo, motivo e IP. **No existe
-  ningun endpoint DELETE** para vales, materiales ni auditoria: probe
-  `DELETE /api/auditoria`, `/api/vales/:id` y `/api/materiales/:id` y los tres
-  dan `Ruta no encontrada`. El unico DELETE del sistema revoca sesiones.
+## Maquina de estados y carreras
 
-**Maquina de estados y carreras**
+Cerrar y entregar, cancelar y autorizar, cancelar y entregar, cancelar un vale
+ajeno, ver un vale ajeno, un estado invalido desde el almacen: todo rechazado con
+el mensaje correcto. Doble autorizacion, doble entrega y carrera entre dos vales
+por el mismo material: en los tres casos uno pasa y el otro recibe `409`, con las
+cantidades y el inventario cuadrados.
 
-- Cerrar el pendiente y despues entregar -> `El vale no esta en condiciones de
-  entrega (estado: CERRADO)`.
-- Cancelar y despues autorizar o entregar -> rechazado por estado.
-- Cancelar un vale ajeno -> `No puede cancelar este vale`. Ver un vale ajeno ->
-  `Solo puede consultar sus propios vales`.
-- Doble clic en autorizar (dos peticiones a la vez): la primera aprueba, la
-  segunda da 409. La cantidad autorizada queda correcta.
-- Doble clic en entregar (dos peticiones a la vez): la primera entrega, la
-  segunda da 409. Se entregaron 4 de 4, no 8.
-- Dos vales distintos del mismo material con existencia justa, entregados a la
-  vez: uno pasa, el otro da `Stock fisico insuficiente`, y el stock quedo en 0,
-  nunca negativo.
-- Reutilizar una firma: `Esa firma ya fue registrada anteriormente`.
-- Firma demasiado corta o sin nombre de quien recibe: rechazadas.
+## Alcance por rol
 
-**Alcance por rol**
+Probe once endpoints de otros roles con cada uno de los cinco roles de planta.
+Resultado limpio: el trabajador recibe `403` en los once; el supervisor solo pasa
+en inventario y exportar; el almacen en cola, inventario, movimientos, exportar y
+empresa externa; el trabajador externo en ninguno. En el navegador, escribir la
+URL a mano ya no abre ninguna pantalla que no toque.
 
-Probe con cada rol todas las pantallas por URL directa. Estan bien bloqueadas
-`/inventario`, `/movimientos`, `/entradas`, `/auditoria`, `/usuarios`,
-`/configuracion`, `/exportar`, `/almacen` y `/reyna` para quien no le toca. Por
-API, un trabajador recibe el 403 correcto en `/api/almacen/cola`,
-`/api/vales/:id/autorizar`, `/api/auditoria`, `/api/usuarios`,
-`/api/inventario`, `/api/movimientos` y `/api/exportar/*`. Las unicas fugas son
-las de los hallazgos 3, 4, 5, 6, 7 y 17.
+## Alcance por empresa
 
-**Alcance por empresa (lo que si funciona)**
+`RSU-01` ve 33 vales, todos REYNA; no puede abrir un vale interno; no tiene
+`movimientos.leer` ni `reyna.leer`; su lista de exportaciones esta vacia. El
+flujo completo de la empresa externa funciona: `RNA-001` crea, `SUP-01` **no**
+puede autorizarlo, `RSU-01` si, el almacen entrega, el movimiento queda con
+`empresa = REYNA` y aparece en el estado de cuenta.
 
-`GET /api/vales` de `RSU-01` devuelve solo vales REYNA. Abrir un vale interno
-por URL da `Este vale no pertenece a su area` / `Solo puede consultar sus
-propios vales`. Los movimientos si filtran por empresa. El flujo completo de la
-empresa externa funciona: `RNA-001` crea, `RSU-01` autoriza (y `SUP-01` **no**
-puede), el almacen entrega y el movimiento queda con `empresa = REYNA`.
-`/api/reyna/*` esta bien cerrado: `RSU-01` no tiene `reyna.leer`.
+## Costos ocultos
 
-**Seguridad**
+Revise el JSON crudo, no solo la pantalla. Ni `EMP-001`, ni `SUP-01`, ni
+`RSU-01`, ni `RNA-001` reciben `precio_unitario` ni `importe` en el detalle del
+vale, ni `importe` en los totales, ni costos en inventario, ni `valor_total` en el
+resumen, ni `costo_total` en trailers, ni costos en la analitica de kits.
 
-- Inyeccion SQL: probe `' OR 1=1--`, `x'; DROP TABLE vales;--` y
-  `2020-01-01') OR 1=1--` en el buscador de materiales, el buscador global, los
-  filtros de fecha de vales y el parametro de exportacion. Todo va con consultas
-  preparadas: devuelven cero resultados y las tablas quedaron intactas (205
-  vales antes y despues).
-- Texto malicioso: guarde `<img src=x onerror=alert(1)>`, comillas, acentos y
-  emoji en notas, motivos, nombre de cliente y modelo de trailer. Se muestran
-  como texto en todas las pantallas, incluida auditoria. La interfaz construye
-  todo con `textContent` y solo usa `innerHTML` para los SVG que genera ella
-  misma. Cero errores de JavaScript en la consola.
-- CSP: la cabecera esta puesta y es estricta (`default-src 'self'`,
-  `script-src 'self'`, `object-src 'none'`, `base-uri 'none'`,
-  `frame-ancestors 'none'`). Tambien estan `X-Content-Type-Options: nosniff`,
-  `X-Frame-Options: DENY`, `Referrer-Policy` y `Permissions-Policy`.
-- Recorrido de rutas: probe `/../server/schema.sql`, `/..%2fserver%2fdb.js`,
-  `/%2e%2e/server/index.js`, `/css/../../server/config.js`, `/data/app.db` y
-  `/../data/app.db`. Ninguno sirve archivo: los bloquea el filtro de
-  `serveStatic`. `/../../etc/passwd` responde 200 pero es **index.html** (la
-  aplicacion es de una sola pagina y cualquier ruta desconocida devuelve el
-  armazon); no se filtra ningun archivo.
-- Contrasenas y PIN: no aparecen ni en `/api/auth/me`, ni en `/api/usuarios`,
-  ni en ningun mensaje de error, ni en la salida de la Terminal. En la base solo
-  hay hashes `scrypt$16384$8$1$...`.
-- Sesiones: cerrar sesion invalida de verdad la cookie (`Sesion no valida o
-  expirada` al reintentarla), y revocar una sesion desde Administracion tambien.
-  En la tabla `sessions` el `id` es el sha256 del token, nunca el token.
-- Enumeracion de usuarios: el mensaje es el mismo para un empleado que no existe
-  y para un PIN equivocado (`ID de empleado o PIN incorrecto`). Bien resuelto.
-- Bloqueo por intentos: tras 5 fallos pide la verificacion aritmetica y despues
-  bloquea la cuenta (`Acceso bloqueado temporalmente por intentos fallidos`),
-  aunque se cambie de IP en cada intento.
-- 2FA: no se salta mandando el login sin codigo (devuelve `requiere_2fa`), ni
-  con `codigo: null`, ni con un codigo inventado, ni mandando un arreglo en vez
-  de una cadena.
-- Cuerpo gigante: 8 MB en una peticion se corta con 413 y el servidor sigue
-  respondiendo.
-- Notificaciones ajenas: `EMP-001` intento marcar como leida una notificacion del
-  supervisor; la peticion devuelve `{"ok":true}` pero **no** modifica nada,
-  porque el UPDATE lleva `AND user_id = ?`. La notificacion del supervisor siguio
-  sin leer.
+## Los siete pasos de la demostracion
 
-**Interfaz**
+1. **Abrir y anclar**: titulo, manifest y service worker registrados.
+2. **`EMP-001` crea un vale con kit ajustando una cantidad**: **5.2 segundos**
+   (meta: menos de 60). Las cuatro cantidades a la vista.
+3. **`SUP-01` autoriza parcial**: recorte de 3 a 1 desde la ventana; el vale sale
+   de pendientes.
+4. **`ALM-01` surte y entrega firmando con el dedo**: funciona, ver arriba.
+5. **El inventario baja y el vale queda con su pendiente**: verificado en pantalla
+   y por API.
+6. **Direccion ve el costo real del trailer**: panel con valor de inventario,
+   consumo del mes y por cobrar a la empresa externa; en Trailers, el trailer 183
+   con **$243,530.23** de costo acumulado.
+7. **El administrador abre Auditoria**: la entrega que acababa de hacer aparece
+   arriba — `Hilda Marquez Tovar / ENTREGA REGISTRADA / vales 216 / Recibio:
+   Kevin Orozco Padilla`, con su boton de "Ver cambio", y encima la autorizacion.
 
-- Recorri en telefono (390x844, con toque real) las pantallas de acceso, mis
-  vales, crear vale, detalle de vale, cola de almacen, preparar, inventario,
-  entradas, movimientos, kits, trailers, empresa externa, exportar y perfil.
-  **Ninguna desborda horizontalmente** (`scrollWidth` = 390 en todas). Las tablas
-  anchas se desplazan dentro de su propio contenedor.
-- Modo oscuro: las mismas pantallas con `prefers-color-scheme: dark`, todas con
-  fondo `rgb(15,19,25)` y sin desbordes.
-- La firma con el dedo funciona: dibuje con eventos tactiles reales sobre el
-  canvas, se guardo y la entrega quedo registrada. El aviso "Entrega registrada.
-  Inventario actualizado." salio y la existencia bajo de 2,656 a 2,655 en la
-  misma pantalla.
-- Consola del navegador abierta todo el recorrido: **cero errores de
-  JavaScript**. Lo unico que aparece son los 401 y 403 esperados cuando se
-  entra a una pantalla sin permiso, que la aplicacion maneja bien.
-- El aviso emergente no tapa el boton principal (lo comprobe con
-  `elementFromPoint` sobre el centro del boton REVISAR Y ENVIAR).
-- `npm test` pasa 14 de 14 antes y despues de todas las pruebas.
+**La notificacion en vivo**, que era el punto flojo, ahora cumple los cuatro
+requisitos: suena, vibra, enciende el punto rojo y **aparece el vale**.
+
+## Telefono
+
+Barri 21 pantallas con los tres perfiles (trabajador, almacen, administrador), en
+**modo claro y modo oscuro**, a 390x844 con toque real. **Ninguna desborda
+horizontalmente** (390 de 390 en las 42 combinaciones). Modo oscuro consistente
+(`rgb(15,19,25)`). Las tablas anchas se desplazan dentro de su contenedor. El
+boton "atras" del navegador recorre bien las cinco pantallas hacia atras y hacia
+adelante, sin pantallas en blanco.
+
+## Seguridad
+
+- **Inyeccion SQL**: ocho vectores (materiales, buscador global, filtros de fecha
+  de vales, inventario, accion de auditoria, tipo de movimiento, periodo de la
+  empresa externa y el parametro de exportacion). Todo parametrizado: cero
+  resultados y las 215 filas de vales intactas.
+- **Texto malicioso**: `<script>alert(1)</script>`, `<img src=x onerror=...>`,
+  comillas, acentos y emoji guardados en cliente, modelo, notas y motivos. En
+  trailers, auditoria y vales: **0 scripts inyectados, 0 imagenes fantasma, 0
+  alertas disparadas**, y el texto se ve como texto.
+- **Secretos**: ni `pin_hash`, ni `password_hash`, ni `twofa_secret` aparecen en
+  `/api/auth/me` ni en `/api/usuarios`. En la base, solo hashes.
+- **Enumeracion de usuarios**: mismo mensaje para un empleado que no existe y
+  para un PIN equivocado.
+- **Bloqueo por intentos**: tras 5 fallos entra la verificacion aritmetica y
+  despues el bloqueo de la cuenta, aunque se cambie de IP.
+- **Sesiones**: cerrar sesion invalida la cookie; revocar una sesion desde
+  Administracion tambien (`Sesion no valida o expirada` al intentar guardar un
+  vale). En `sessions` el `id` es el sha256 del token.
+- **2FA**: no se salta sin codigo, con codigo malo, con `null` ni mandando un
+  arreglo.
+- **Cabeceras**: CSP estricta, `nosniff`, `X-Frame-Options: DENY`.
+- **Cuerpo gigante**: 8 MB se corta y el servidor sigue respondiendo.
+- **Recorrido de rutas**: seis vectores, todos `404`. Ningun archivo del servidor
+  ni la base se sirven.
+
+## Casos raros
+
+Campos obligatorios vacios (vale sin trailer, sin materiales, con trailer o
+material inexistente) y cuerpo que no es JSON: todos con `400` y mensaje claro.
+Consola del navegador abierta todo el recorrido: **cero errores de JavaScript**
+en las 21 pantallas, los dos temas, los siete pasos y las pruebas de doble clic.
+Lo unico que sale son los `401`/`403` esperados al tocar algo sin permiso.
 
 ---
 
-## Notas de operacion para el dia de la demostracion
+# Notas de operacion para el dia de la demostracion
 
-1. Correr `npm run reset` antes de empezar: mis pruebas dejaron la base sucia
-   varias veces y la volvi a dejar limpia al terminar.
-2. Levantar el servidor con `SECURE_COOKIES=1` si sale por el tunel (hallazgo 16).
-3. **No tocar la pantalla de Entradas** delante del cliente hasta que este
-   arreglado el hallazgo 8.
-4. Nunca cambie la duracion de la sesion con PIN: los cinco minutos no me
-   estorbaron porque cada peticion renueva la sesion. La restriccion de red si
-   la encendi para probar el hallazgo 2 y la volvi a apagar. Comprobado al
-   terminar: `sesion_pin_minutos = 5`, `restriccion_red_activa = 0`,
-   `redes_permitidas` con sus valores de origen, 200 vales y **ningun material
-   con existencia negativa**. La base quedo como recien sembrada.
+1. **Correr `npm run reset` antes de empezar.** Mis pruebas ensuciaron la base
+   varias veces; la deje limpia (200 vales, 0 materiales en negativo, la
+   configuracion en sus valores de origen: `sesion_pin_minutos = 5`,
+   `restriccion_red_activa = 0`, `redes_permitidas` por defecto).
+
+2. **Si sale por el tunel, hay que arrancar asi:**
+
+   ```bash
+   SECURE_COOKIES=1 PROXIES_CONFIANZA=127.0.0.1,::1 npm start
+   ```
+
+   `SECURE_COOKIES=1` por el hallazgo 16. `PROXIES_CONFIANZA` es nuevo y **es
+   importante**: sin el, todo el que entre por el tunel llega con la misma
+   direccion, asi que **el limite de 600 peticiones por minuto lo comparten
+   todos** y, si alguien falla cinco veces al entrar, a los demas les empieza a
+   pedir la verificacion aritmetica aunque tecleen bien su PIN. Me paso durante
+   las pruebas: fallé unos intentos y despues `EMP-003`, con su PIN correcto,
+   tuvo que resolver "5 + 8" para entrar. No es un error del arreglo, es la
+   consecuencia de compartir IP; el codigo ya lo advierte en `server/config.js` y
+   la variable existe justo para eso.
+
+3. **Cuidado con el doble toque al enviar un vale** (hallazgo 11) mientras no se
+   arregle: si la red va lenta y alguien toca dos veces, se crean dos vales
+   iguales. Tocar una sola vez y esperar.
