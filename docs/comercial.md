@@ -162,8 +162,12 @@ Archivo / IBM Plex). Se imprimen limpias a PDF.
 - **Propuesta comercial** — https://claude.ai/code/artifact/cea1099f-c80d-402d-959a-f16954803868
 - **Anexo "Traza en la planta"** (como funciona, diagramas) — https://claude.ai/code/artifact/b89bec37-d699-44ad-aa08-76c5b4a35d64
 
-Pendiente de armar: **guion de la demostracion** (los siete pasos, accesos para
-imprimir en tarjetas, lista de verificacion y plan B).
+- **Guion de la demostracion "Traza en vivo"** — https://claude.ai/code/artifact/70662620-0e7b-481f-b174-92e9a38d145c
+
+El guion reparte la junta en 20 minutos (3 de apertura, 7 de los siete pasos que
+operan ellos, 6 de las cuatro preguntas y los numeros, 4 de cierre), trae lo que
+se dice en cada paso, las respuestas a las ocho objeciones probables, la lista de
+la manana, el plan B y las tarjetas de acceso para imprimir.
 
 Faltan por llenar en la propuesta: telefono del usuario, y sustituir el correo
 personal de iCloud por uno con dominio propio.
