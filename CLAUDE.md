@@ -206,6 +206,9 @@ cambios de codigo.
 sobre el cliente, el precio, la demostracion en vivo y las decisiones de
 arquitectura, para no volver a discutirlo desde cero.
 
+Lo que falta para llegar a la junta esta en `docs/checklist-junta.md`, con
+casillas que se van marcando.
+
 ## Contexto del usuario
 
 - Trabaja en Mac, con la Terminal y GitHub Desktop; **no es programador**.
