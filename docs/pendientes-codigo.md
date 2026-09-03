@@ -175,7 +175,7 @@ ni cambiar un costo por la API, ni tener una sesion de administrador abierta
 para sobrescribir un 2FA. El **16** ya esta resuelto por operacion, arrancando
 con `SECURE_COOKIES=1`.
 
-## [ ] 19. Cambiar el segundo factor debe pedir la contrasena y quedar en auditoria (hallazgo 14)
+## [x] 19. Cambiar el segundo factor debe pedir la contrasena y quedar en auditoria (hallazgo 14)
 
 **Antes de la junta.** No por el riesgo de que pase, sino porque **contradice lo
 que se afirma en la demostracion**.
@@ -198,6 +198,30 @@ tiene que decir lo que se afirma.
 la demostracion.** Al terminar, entrar y salir con `admin@demo.local` y con
 `direccion@demo.local`, con y sin 2FA activo. Si algo queda dudoso, revertir:
 vale mas el hallazgo abierto que quedarse fuera de la app en la junta.
+
+**Hecho.** `2fa/iniciar` pide la contrasena, y ademas el codigo vigente si ya hay
+un segundo factor activo. El alta, el reemplazo, la activacion y la baja quedan
+en auditoria con el valor anterior.
+
+Dos decisiones que salieron al hacerlo, las dos para no dejar a nadie fuera:
+
+1. **El secreto nuevo no se guarda hasta que se confirma.** Vive en memoria diez
+   minutos, como los retos del acceso. Antes se escribia al empezar, asi que
+   dejar el alta a medias (cerrar la ventana, equivocarse de aplicacion) tumbaba
+   el segundo factor que ya funcionaba. Ahora el anterior sigue sirviendo hasta
+   que se confirma el nuevo, y la prueba lo comprueba entrando con el viejo
+   despues de pedir un reemplazo.
+2. **Los errores de confirmacion devuelven 400, no 401.** Para el cliente un 401
+   significa "su sesion murio" y cierra la aplicacion: la primera version de
+   esta tarea sacaba al administrador de la app por teclear mal su contrasena en
+   esa ventana. Se corrigio antes de commitear, y quedo probado.
+
+Verificado en la aplicacion corriendo, no solo con `npm test`: `admin@demo.local`
+y `direccion@demo.local` entran y salen **sin** 2FA, activan 2FA desde Perfil,
+entran y salen **con** 2FA (la app pide el codigo y sin el no deja pasar), lo
+desactivan y vuelven a entrar sin codigo. Las tres acciones aparecen en
+Auditoria. Las dos cuentas quedan con el segundo factor apagado, como deben
+llegar a la junta.
 
 ## [x] 20. Tope de cantidad en los vales (hallazgo 12)
 

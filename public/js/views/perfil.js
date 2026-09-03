@@ -1,7 +1,7 @@
 /** Perfil del usuario: datos, cambio de PIN o contrasena y verificacion en dos pasos. */
 import { api } from '../api.js';
 import {
-  h, vaciar, tarjeta, chip, kpi, cargando, campo, modal, avisoOk, avisoError, iniciales, alEscribir
+  h, vaciar, tarjeta, chip, kpi, cargando, campo, modal, avisoOk, avisoError, iniciales
 } from '../ui.js';
 import { tituloVista, estado, cerrarSesion } from '../app.js';
 
@@ -40,7 +40,9 @@ export async function render() {
   if (['ADMIN', 'DIRECCION', 'SUPERVISOR'].includes(u.rol)) {
     acciones.push(h('button', {
       clase: u.twofa_enabled ? 'btn' : 'btn btn-primario',
-      onclick: u.twofa_enabled ? desactivar2fa : alEscribir(activar2fa)
+      // Los dos solo abren una ventana; la peticion la manda el boton del pie,
+      // que ya se apaga solo mientras viaja.
+      onclick: u.twofa_enabled ? desactivar2fa : activar2fa
     }, u.twofa_enabled ? 'Desactivar verificacion en dos pasos' : 'Activar verificacion en dos pasos'));
   }
   acciones.push(h('button', { clase: 'btn btn-oscuro', onclick: () => cerrarSesion() }, 'CERRAR SESION'));
@@ -106,38 +108,73 @@ export async function render() {
     });
   }
 
-  async function activar2fa() {
-    try {
-      const { secret, otpauth } = await api.post('/api/auth/2fa/iniciar');
-      const codigo = h('input', { type: 'text', inputmode: 'numeric', maxlength: '6', placeholder: '000000' });
-      modal({
-        titulo: 'Verificacion en dos pasos',
-        cuerpo: h('div', {},
-          h('p', { texto: 'Agregue esta clave en su aplicacion de autenticacion (por ejemplo, la app de codigos de su telefono) y escriba el codigo de 6 digitos que muestre.' }),
-          h('div', { clase: 'aviso' },
-            h('div', { clase: 'kpi-etiqueta', texto: 'Clave secreta' }),
-            h('div', { clase: 'mono negrita', style: 'font-size:17px;letter-spacing:2px;word-break:break-all', texto: secret })
-          ),
-          h('div', { clase: 'pequeno silencio mono', style: 'word-break:break-all', texto: otpauth }),
-          campo('Codigo de verificacion', codigo)
-        ),
-        acciones: [
-          { texto: 'Cancelar' },
-          {
-            texto: 'Activar',
-            clase: 'btn-primario',
-            accion: async (cerrar) => {
-              try {
-                await api.post('/api/auth/2fa/activar', { codigo: codigo.value.trim() });
-                cerrar();
-                estado.user.twofa_enabled = true;
-                avisoOk('Verificacion en dos pasos activada');
-              } catch (err) { avisoError(err.message); }
-            }
+  /**
+   * Configurar el segundo factor pide la contrasena, y el codigo vigente si ya
+   * hay uno activo. Es un cambio critico: sin esto, cualquiera que encuentre la
+   * sesion abierta deja fuera al administrador de su propia cuenta.
+   */
+  function activar2fa() {
+    const password = h('input', { type: 'password', placeholder: 'Su contrasena' });
+    const vigente = h('input', { type: 'text', inputmode: 'numeric', maxlength: '6', placeholder: '000000' });
+    modal({
+      titulo: u.twofa_enabled ? 'Reemplazar la verificacion en dos pasos' : 'Verificacion en dos pasos',
+      ancho: 'angosto',
+      cuerpo: h('div', {},
+        h('p', { clase: 'silencio', texto: u.twofa_enabled
+          ? 'Para cambiar de aplicacion de autenticacion, confirme su contrasena y el codigo que muestra la que usa hoy. La actual sigue funcionando hasta que confirme la nueva.'
+          : 'Confirme su contrasena para empezar. Este cambio queda registrado en auditoria.' }),
+        campo('Contrasena', password),
+        u.twofa_enabled ? campo('Codigo de la aplicacion actual', vigente) : null
+      ),
+      acciones: [
+        { texto: 'Cancelar' },
+        {
+          texto: 'Continuar',
+          clase: 'btn-primario',
+          accion: async (cerrar) => {
+            try {
+              const datos = await api.post('/api/auth/2fa/iniciar', {
+                password: password.value, codigo: vigente.value.trim()
+              });
+              cerrar();
+              mostrarClave2fa(datos);
+            } catch (err) { avisoError(err.message); }
           }
-        ]
-      });
-    } catch (err) { avisoError(err.message); }
+        }
+      ]
+    });
+  }
+
+  /** La clave nueva no sustituye a la anterior hasta que se confirma aqui. */
+  function mostrarClave2fa({ secret, otpauth }) {
+    const codigo = h('input', { type: 'text', inputmode: 'numeric', maxlength: '6', placeholder: '000000' });
+    modal({
+      titulo: 'Verificacion en dos pasos',
+      cuerpo: h('div', {},
+        h('p', { texto: 'Agregue esta clave en su aplicacion de autenticacion (por ejemplo, la app de codigos de su telefono) y escriba el codigo de 6 digitos que muestre.' }),
+        h('div', { clase: 'aviso' },
+          h('div', { clase: 'kpi-etiqueta', texto: 'Clave secreta' }),
+          h('div', { clase: 'mono negrita', style: 'font-size:17px;letter-spacing:2px;word-break:break-all', texto: secret })
+        ),
+        h('div', { clase: 'pequeno silencio mono', style: 'word-break:break-all', texto: otpauth }),
+        campo('Codigo de verificacion', codigo)
+      ),
+      acciones: [
+        { texto: 'Cancelar' },
+        {
+          texto: 'Activar',
+          clase: 'btn-primario',
+          accion: async (cerrar) => {
+            try {
+              await api.post('/api/auth/2fa/activar', { codigo: codigo.value.trim() });
+              cerrar();
+              estado.user.twofa_enabled = true;
+              avisoOk('Verificacion en dos pasos activada');
+            } catch (err) { avisoError(err.message); }
+          }
+        }
+      ]
+    });
   }
 
   function desactivar2fa() {

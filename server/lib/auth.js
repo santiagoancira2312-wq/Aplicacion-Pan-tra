@@ -129,6 +129,41 @@ export function purgarRetos() {
   for (const [k, v] of retos) if (v.expira < ahora) retos.delete(k);
 }
 
+// --------------------------------------------------------------------------
+// Segundo factor a medio configurar
+//
+// El secreto nuevo NO se guarda en la base hasta que la persona confirma un
+// codigo con el. Si se guardara al empezar, dejar el proceso a medias (cerrar
+// la ventana, equivocarse de aplicacion) tumbaria el segundo factor que ya
+// funcionaba y el administrador se quedaria fuera de su propia cuenta. Vive en
+// memoria, caduca solo, y si el servidor se reinicia lo unico que pasa es que
+// hay que volver a empezar el alta.
+// --------------------------------------------------------------------------
+const secretosPendientes = new Map();
+const VIGENCIA_ALTA_2FA = 10 * 60000;
+
+export function guardarSecretoPendiente(userId, secret) {
+  secretosPendientes.set(userId, { secret, expira: Date.now() + VIGENCIA_ALTA_2FA });
+}
+
+export function leerSecretoPendiente(userId) {
+  const pendiente = secretosPendientes.get(userId);
+  if (!pendiente || pendiente.expira < Date.now()) {
+    secretosPendientes.delete(userId);
+    return null;
+  }
+  return pendiente.secret;
+}
+
+export function olvidarSecretoPendiente(userId) {
+  secretosPendientes.delete(userId);
+}
+
+export function purgarSecretosPendientes() {
+  const ahora = Date.now();
+  for (const [k, v] of secretosPendientes) if (v.expira < ahora) secretosPendientes.delete(k);
+}
+
 export function applyFailure(user, identifier, ip) {
   recordAttempt(identifier, ip, false);
   if (!user) return;
@@ -193,6 +228,7 @@ export function loadSession(token) {
 
 export function purgeExpired() {
   purgarRetos();
+  purgarSecretosPendientes();
   run(`DELETE FROM sessions WHERE expires_at < datetime('now', '-1 day')`);
   run(`DELETE FROM login_attempts WHERE created_at < datetime('now', '-7 days')`);
 }

@@ -11,6 +11,7 @@ import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import crypto from 'node:crypto';
 
 const PORT = 3400 + Math.floor(Math.random() * 200);
 const BASE = `http://127.0.0.1:${PORT}`;
@@ -754,4 +755,93 @@ test('un vale rechaza cantidades absurdas, al crearlo y al autorizarlo', async (
   assert.equal(buena.status, 200, 'la autorizacion normal no se rompe');
   assert.equal(buena.datos.items[0].cantidad_autorizada, 900);
   assert.equal(buena.datos.items[0].cantidad_solicitada, 1000, 'la solicitada no se toca');
+});
+
+test('cambiar el segundo factor pide la contrasena y queda en auditoria', async () => {
+  // Hallazgo 14. Bastaba con tener la sesion abierta para sobrescribir el
+  // secreto: dejaba fuera al administrador legitimo y no quedaba registrado.
+  // En el paso 7 de la demostracion se abre Auditoria y se afirma lo contrario.
+  const B32 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+  const codigoDe = (secreto, desfase = 0) => {
+    let bits = '';
+    for (const c of secreto) bits += B32.indexOf(c).toString(2).padStart(5, '0');
+    const bytes = [];
+    for (let i = 0; i + 8 <= bits.length; i += 8) bytes.push(parseInt(bits.slice(i, i + 8), 2));
+    const buf = Buffer.alloc(8);
+    buf.writeBigInt64BE(BigInt(Math.floor(Date.now() / 30000) + desfase));
+    const hmac = crypto.createHmac('sha1', Buffer.from(bytes)).update(buf).digest();
+    const off = hmac[hmac.length - 1] & 0x0f;
+    const n = ((hmac[off] & 0x7f) << 24) | (hmac[off + 1] << 16) | (hmac[off + 2] << 8) | hmac[off + 3];
+    return String(n % 1000000).padStart(6, '0');
+  };
+
+  await api('POST', '/api/auth/login',
+    { usuario: 'admin@demo.local', password: 'Demo.Admin.2026' }, 'dosPasos');
+
+  // Sin contrasena no se puede ni empezar.
+  // 400 y no 401: para el cliente un 401 significa "su sesion murio" y cierra
+  // la aplicacion. Un dedazo aqui no puede sacar al administrador de la app.
+  const sinPassword = await api('POST', '/api/auth/2fa/iniciar', {}, 'dosPasos');
+  assert.equal(sinPassword.status, 400, 'sin contrasena no se configura el segundo factor');
+  assert.equal(sinPassword.datos.secret, undefined, 'y no se entrega ninguna clave');
+
+  const passwordMala = await api('POST', '/api/auth/2fa/iniciar', { password: 'otra-cosa' }, 'dosPasos');
+  assert.equal(passwordMala.status, 400, 'una contrasena equivocada no cierra la sesion');
+  const sigueDentro = await api('GET', '/api/auth/me', undefined, 'dosPasos');
+  assert.equal(sigueDentro.status, 200, 'y la sesion sigue viva despues del error');
+
+  // Con la contrasena correcta si, y queda en auditoria.
+  const inicio = await api('POST', '/api/auth/2fa/iniciar', { password: 'Demo.Admin.2026' }, 'dosPasos');
+  assert.equal(inicio.status, 200);
+  assert.match(inicio.datos.secret, /^[A-Z2-7]{20,}$/);
+
+  // Mientras no se confirme, el usuario sigue SIN segundo factor: dejar el alta
+  // a medias no puede dejar a nadie fuera.
+  const aMedias = await api('GET', '/api/auth/me', undefined, 'dosPasos');
+  assert.equal(aMedias.datos.user.twofa_enabled, false, 'el alta a medias no activa nada');
+  const codigoMalo = await api('POST', '/api/auth/2fa/activar', { codigo: '000000' }, 'dosPasos');
+  assert.equal(codigoMalo.status, 400);
+
+  // Se confirma con el codigo de la clave nueva.
+  const activado = await api('POST', '/api/auth/2fa/activar', { codigo: codigoDe(inicio.datos.secret) }, 'dosPasos');
+  assert.equal(activado.status, 200);
+  assert.equal((await api('GET', '/api/auth/me', undefined, 'dosPasos')).datos.user.twofa_enabled, true);
+
+  // Ya con 2FA activo, reemplazarlo exige ademas el codigo vigente.
+  const soloPassword = await api('POST', '/api/auth/2fa/iniciar', { password: 'Demo.Admin.2026' }, 'dosPasos');
+  assert.equal(soloPassword.status, 400, 'la contrasena sola no basta para reemplazar el que ya funciona');
+  const conVigente = await api('POST', '/api/auth/2fa/iniciar',
+    { password: 'Demo.Admin.2026', codigo: codigoDe(inicio.datos.secret) }, 'dosPasos');
+  assert.equal(conVigente.status, 200);
+  assert.notEqual(conVigente.datos.secret, inicio.datos.secret, 'la clave nueva es otra');
+
+  // Y aunque se pida una clave nueva, la anterior sigue sirviendo para entrar
+  // hasta que se confirme la nueva. Esto es lo que evita quedarse fuera.
+  const entrarConLaVieja = await api('POST', '/api/auth/login',
+    { usuario: 'admin@demo.local', password: 'Demo.Admin.2026', codigo: codigoDe(inicio.datos.secret) }, 'sigueEntrando');
+  assert.equal(entrarConLaVieja.status, 200, 'la clave anterior sigue valiendo si el reemplazo no se confirmo');
+
+  // Auditoria: el alta, el reemplazo y la baja quedan registrados.
+  const auditoria = await api('GET', '/api/auditoria?limit=50', undefined, 'dosPasos');
+  const acciones = auditoria.datos.registros.map((a) => a.accion);
+  assert.ok(acciones.includes('2FA_ALTA_INICIADA'), 'el alta queda registrada');
+  assert.ok(acciones.includes('2FA_ACTIVADO'), 'la activacion queda registrada');
+  assert.ok(acciones.includes('2FA_REEMPLAZO_INICIADO'), 'el reemplazo queda registrado');
+
+  // Baja: sigue pidiendo la contrasena, y tambien queda registrada.
+  const bajaSinPassword = await api('POST', '/api/auth/2fa/desactivar', {}, 'dosPasos');
+  assert.equal(bajaSinPassword.status, 400);
+  assert.equal((await api('GET', '/api/auth/me', undefined, 'dosPasos')).status, 200,
+    'equivocarse al desactivar tampoco cierra la sesion');
+  const baja = await api('POST', '/api/auth/2fa/desactivar', { password: 'Demo.Admin.2026' }, 'dosPasos');
+  assert.equal(baja.status, 200);
+  assert.equal((await api('GET', '/api/auth/me', undefined, 'dosPasos')).datos.user.twofa_enabled, false);
+  const trasBaja = await api('GET', '/api/auditoria?limit=50', undefined, 'dosPasos');
+  assert.ok(trasBaja.datos.registros.some((a) => a.accion === '2FA_DESACTIVADO'), 'la baja queda registrada');
+
+  // Y la cuenta de la demostracion entra otra vez sin codigo, como al principio.
+  const final = await api('POST', '/api/auth/login',
+    { usuario: 'admin@demo.local', password: 'Demo.Admin.2026' }, 'finalAdmin');
+  assert.equal(final.status, 200);
+  assert.equal(final.datos.user.rol, 'ADMIN');
 });

@@ -2,7 +2,8 @@ import { get, run, all, setting } from '../db.js';
 import {
   hashSecret, verifySecret, createSession, destroySession, applyFailure,
   recordAttempt, isLocked, requiresCaptcha, verifyTotp, generateTotpSecret, otpauthUrl,
-  generarReto, verificarReto
+  generarReto, verificarReto,
+  guardarSecretoPendiente, leerSecretoPendiente, olvidarSecretoPendiente
 } from '../lib/auth.js';
 import { badRequest, unauthorized, forbidden, HttpError } from '../lib/http.js';
 import { audit } from '../lib/audit.js';
@@ -179,30 +180,71 @@ export default function register(r) {
     return { ok: true };
   });
 
-  // 2FA: alta y confirmacion
+  // -------------------------------------------------------------------------
+  // 2FA: alta, confirmacion y baja
+  //
+  // Cambiar el segundo factor es un cambio critico y se trata como tal: pide la
+  // contrasena, y queda en auditoria. Antes bastaba con tener la sesion abierta
+  // para sobrescribir el secreto, lo que dejaba fuera al administrador legitimo
+  // sin dejar rastro; en el paso 7 de la demostracion se abre Auditoria y se
+  // afirma que todo cambio critico queda registrado.
+  // -------------------------------------------------------------------------
   r.post('/api/auth/2fa/iniciar', (ctx) => {
     const user = requireUser(ctx);
+    // 400 y no 401 a proposito: para el cliente un 401 significa "su sesion
+    // murio" y cierra la aplicacion. Equivocarse al teclear la contrasena en
+    // esta ventana no puede sacar al administrador de la app, menos en la junta.
+    if (!verifySecret(String(ctx.body.password || ''), user.password_hash)) {
+      throw badRequest('La contrasena no es correcta');
+    }
+    // Si ya hay un segundo factor funcionando, reemplazarlo exige demostrar que
+    // se tiene el actual: la contrasena sola no basta para dejar fuera a nadie.
+    if (user.twofa_enabled && !verifyTotp(user.twofa_secret, ctx.body.codigo)) {
+      throw badRequest('Escriba el codigo vigente de su aplicacion para reemplazar la verificacion en dos pasos');
+    }
+
+    // El secreto nuevo se queda en memoria hasta que se confirme: dejar el alta
+    // a medias no puede tumbar el segundo factor que ya funcionaba.
     const secret = generateTotpSecret();
-    run('UPDATE users SET twofa_secret = ? WHERE id = ?', secret, user.id);
+    guardarSecretoPendiente(user.id, secret);
+    audit(ctx, {
+      accion: user.twofa_enabled ? '2FA_REEMPLAZO_INICIADO' : '2FA_ALTA_INICIADA',
+      entidad: 'users', entidad_id: user.id,
+      antes: { twofa_enabled: !!user.twofa_enabled }
+    });
     return { secret, otpauth: otpauthUrl(secret, user.email || user.employee_id) };
   });
 
   r.post('/api/auth/2fa/activar', (ctx) => {
     const user = requireUser(ctx);
-    const fresco = get('SELECT twofa_secret FROM users WHERE id = ?', user.id);
-    if (!verifyTotp(fresco.twofa_secret, ctx.body.codigo)) throw badRequest('Codigo incorrecto');
-    run('UPDATE users SET twofa_enabled = 1 WHERE id = ?', user.id);
-    audit(ctx, { accion: '2FA_ACTIVADO', entidad: 'users', entidad_id: user.id });
+    const pendiente = leerSecretoPendiente(user.id);
+    if (!pendiente) {
+      throw badRequest('El alta caduco o no se inicio. Vuelva a empezar la configuracion.');
+    }
+    if (!verifyTotp(pendiente, ctx.body.codigo)) throw badRequest('Codigo incorrecto');
+
+    // Hasta aqui el secreto viejo seguia intacto: se cambia al confirmar.
+    run('UPDATE users SET twofa_secret = ?, twofa_enabled = 1 WHERE id = ?', pendiente, user.id);
+    olvidarSecretoPendiente(user.id);
+    audit(ctx, {
+      accion: '2FA_ACTIVADO', entidad: 'users', entidad_id: user.id,
+      antes: { twofa_enabled: !!user.twofa_enabled }, nuevo: { twofa_enabled: true }
+    });
     return { ok: true };
   });
 
   r.post('/api/auth/2fa/desactivar', (ctx) => {
     const user = requireUser(ctx);
+    // Mismo motivo que arriba: un dedazo en la contrasena no cierra la sesion.
     if (!verifySecret(String(ctx.body.password || ''), user.password_hash)) {
-      throw unauthorized('Confirme su contrasena para desactivar 2FA');
+      throw badRequest('La contrasena no es correcta');
     }
     run('UPDATE users SET twofa_enabled = 0, twofa_secret = NULL WHERE id = ?', user.id);
-    audit(ctx, { accion: '2FA_DESACTIVADO', entidad: 'users', entidad_id: user.id });
+    olvidarSecretoPendiente(user.id);
+    audit(ctx, {
+      accion: '2FA_DESACTIVADO', entidad: 'users', entidad_id: user.id,
+      antes: { twofa_enabled: !!user.twofa_enabled }, nuevo: { twofa_enabled: false }
+    });
     return { ok: true };
   });
 
