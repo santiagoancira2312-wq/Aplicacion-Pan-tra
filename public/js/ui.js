@@ -145,13 +145,34 @@ export function modal({ titulo, cuerpo, acciones = [], ancho = '', alCerrar }) {
   const escape = (e) => { if (e.key === 'Escape') cerrar(); };
   document.addEventListener('keydown', escape);
 
-  const pie = acciones.length
-    ? h('div', { clase: 'modal-pie' }, acciones.map((a) => h('button', {
-      clase: `btn ${a.clase || ''}`,
-      onclick: () => { if (a.accion) a.accion(cerrar); else cerrar(); },
-      disabled: a.desactivado
-    }, a.texto)))
-    : null;
+  // Mientras una accion viaja, ningun boton del pie responde: un segundo toque
+  // mandaba la operacion otra vez (dos vales identicos, una entrega duplicada).
+  // Se reactivan al terminar, salga bien o mal, para no dejarlos muertos.
+  const botones = acciones.map((a) => h('button', {
+    clase: `btn ${a.clase || ''}`, disabled: a.desactivado
+  }, a.texto));
+
+  let trabajando = false;
+  botones.forEach((boton, i) => {
+    const a = acciones[i];
+    boton.addEventListener('click', async () => {
+      if (trabajando) return;
+      if (!a.accion) return cerrar();
+      trabajando = true;
+      const comoEstaban = botones.map((b) => b.disabled);
+      for (const b of botones) b.disabled = true;
+      boton.classList.add('trabajando');
+      try {
+        await a.accion(cerrar);
+      } finally {
+        trabajando = false;
+        boton.classList.remove('trabajando');
+        botones.forEach((b, j) => { b.disabled = comoEstaban[j]; });
+      }
+    });
+  });
+
+  const pie = acciones.length ? h('div', { clase: 'modal-pie' }, botones) : null;
 
   const caja = h('div', { clase: `modal ${ancho}`, role: 'dialog', 'aria-modal': 'true' },
     h('div', { clase: 'modal-cabecera' },
@@ -249,6 +270,41 @@ export function disponible(valor, unidad = '') {
   );
 }
 
+/**
+ * En una iPad, un punto de color no comunica "ya no hay": hay que decirlo con
+ * todas sus letras. Se usa en el buscador de materiales, en las lineas del vale
+ * y en la lista de surtido del almacen, para que sea la misma senal en los tres.
+ */
+export const sinExistencia = (valor) => (Number(valor) || 0) <= 0;
+export const etiquetaAgotado = (texto = 'AGOTADO') => chip(texto, 'rojo');
+
+/**
+ * Envuelve el manejador de un boton que escribe. Lo apaga en cuanto arranca la
+ * peticion y lo enciende al terminar, SALGA BIEN O MAL, para no dejarlo muerto.
+ *
+ * Sin esto, un segundo toque mientras la peticion viaja manda la operacion otra
+ * vez: dos vales identicos que el supervisor tiene que resolver por separado, o
+ * una entrega duplicada. Sobre el tunel la ventana es mas ancha que en la red
+ * local, y quien va a tocar el boton es alguien que nunca ha visto la app, que
+ * es exactamente quien vuelve a tocar cuando algo no responde al instante.
+ */
+export function alEscribir(manejador) {
+  let trabajando = false;
+  return async function (evento) {
+    if (trabajando) return;
+    trabajando = true;
+    // El boton se toma antes de esperar: despues del await el evento ya no lo trae.
+    const boton = evento && evento.currentTarget;
+    if (boton) { boton.disabled = true; boton.classList.add('trabajando'); }
+    try {
+      return await manejador.call(this, evento);
+    } finally {
+      trabajando = false;
+      if (boton) { boton.disabled = false; boton.classList.remove('trabajando'); }
+    }
+  };
+}
+
 export function tarjeta(titulo, contenido, acciones = null, opciones = {}) {
   return h('div', { clase: 'tarjeta' },
     titulo ? h('div', { clase: 'tarjeta-cabecera' },
@@ -276,11 +332,32 @@ export function tabla(columnas, filas, opciones = {}) {
 }
 
 export function pestanas(items, activa, alCambiar) {
-  return h('div', { clase: 'pestanas' }, items.map((it) => h('button', {
+  const tira = h('div', { clase: 'pestanas' }, items.map((it) => h('button', {
     clase: `pestana ${it.id === activa ? 'activa' : ''}`,
     onclick: () => alCambiar(it.id)
   }, it.texto, it.cuenta !== undefined && it.cuenta !== null
     ? h('span', { clase: 'cuenta', texto: String(it.cuenta) }) : null)));
+
+  // En telefono caben tres pestanas de seis. La tira si se desplaza, pero nada
+  // avisaba de que hubiera mas, y las pestanas terminan justo en el borde, asi
+  // que ni siquiera se asoma la siguiente. Se pone una flecha a cada lado que
+  // ademas desplaza al tocarla.
+  const flecha = (lado) => h('button', {
+    clase: `pestanas-flecha ${lado}`, tabindex: '-1', 'aria-hidden': 'true',
+    onclick: () => tira.scrollBy({ left: (lado === 'derecha' ? 1 : -1) * tira.clientWidth * 0.7, behavior: 'smooth' })
+  }, icono('volver', 16));
+
+  const caja = h('div', { clase: 'pestanas-caja' }, flecha('izquierda'), tira, flecha('derecha'));
+  const marcarBordes = () => {
+    const resto = tira.scrollWidth - tira.clientWidth;
+    caja.classList.toggle('mas-derecha', resto > 4 && tira.scrollLeft < resto - 4);
+    caja.classList.toggle('mas-izquierda', tira.scrollLeft > 4);
+  };
+  tira.addEventListener('scroll', marcarBordes, { passive: true });
+  // El observador se va con el elemento; un oyente en window quedaria colgado.
+  if (window.ResizeObserver) new ResizeObserver(marcarBordes).observe(tira);
+  requestAnimationFrame(marcarBordes);
+  return caja;
 }
 
 /** Las cuatro cantidades que el sistema nunca debe perder. */

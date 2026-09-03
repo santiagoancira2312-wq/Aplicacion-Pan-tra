@@ -84,6 +84,63 @@ Reglas que no se negocian:
 Las tres primeras dan el tamano. **La cuarta da el precio**, porque es la cifra
 contra la que se compara la cotizacion.
 
+## El ritmo real de la planta (dato del usuario, no supuesto)
+
+**El vale se pide y se recoge con minutos de diferencia**, no de un dia para
+otro: el trabajador lo levanta a las 3:00 y a las 3:10 esta en el mostrador del
+almacen. **El supervisor esta siempre en la planta.**
+
+**Cuidado con el argumento de los viajes: hay dos y solo uno aplica.**
+
+- **NO usar "le ahorra ir a buscar al supervisor".** Es falso aqui: el supervisor
+  esta siempre en la planta y alguien lo va a contradecir en la junta.
+- **SI usar "le ahorra el viaje al almacen por material que no hay".** Este es
+  real y fuerte: hoy el trabajador llena el vale, camina al almacen, hace fila y
+  hasta el mostrador se entera de que no hay existencia. Con papel no hay forma
+  de saberlo antes: el dato vive en el estante y en la cabeza del almacenista.
+  Y no es solo su tiempo perdido, es que **el trailer esta detenido por falta de
+  esa pieza y nadie lo sabia**.
+
+  Momento de demostracion, despues del paso 2: que el trabajador busque a
+  proposito un material agotado, aparece AGOTADO, y se dice *"aqui se ahorro el
+  viaje, y ustedes se acaban de enterar de que hay un trailer parado por esta
+  pieza; hoy se enterarian manana"*. De ahi la tarea 14.
+
+  Condicion honesta, y conviene decirla primero uno mismo: **esto sirve si las
+  entradas se registran.** Si el sistema dice agotado cuando si hay, el
+  trabajador aprende a ignorarlo en dos semanas. Es disciplina que se mete en la
+  capacitacion.
+
+Lo otro que es cierto, y es lo mas fuerte:
+
+**El vale de papel es rapido porque no controla nada.** Diez minutos suena
+eficiente, y lo es porque en el camino nadie verifica: el supervisor firma al
+vuelo, muchas veces sin leer, el papel llega al almacen y de ahi al cajon. Nadie
+puede reconstruir despues que salio, para que trailer, ni cuanto costo.
+
+> No se les vende velocidad, ya son rapidos. Se les vende que esos mismos diez
+> minutos dejen rastro.
+
+**El riesgo real del proyecto, entonces, es la friccion.** Si la app tarda mas
+de esos diez minutos, la planta la rechaza: no por lo que le falte, sino porque
+estorba. Por eso la meta de **crear un vale en menos de un minuto** no es un
+capricho de diseno, es la condicion para que el sistema sobreviva.
+
+Consecuencia para la junta: **cronometrar el paso 2 delante de ellos**, con
+alguien de su gente creando el vale. Si sale en 40 segundos, se mata la unica
+objecion seria antes de que la digan.
+
+**Lo que gana el supervisor no es caminar menos: es dejar de ser interrumpido.**
+Hoy cada vale es alguien que lo busca, lo encuentra a media conversacion y le
+pone un papel enfrente, diez o quince veces al dia. Con la app autoriza desde el
+telefono en cinco segundos sin soltar lo que esta haciendo. Eso si lo siente, y
+lo vuelve el mejor aliado dentro de la planta.
+
+Sigue siendo cierto que **el supervisor esta en la ruta critica**: tiene que
+autorizar dentro de esa ventana de minutos o el trabajador se queda parado en el
+mostrador. Por eso las notificaciones sostienen el flujo, y por eso su sesion no
+puede durar 5 minutos (tarea 16 de docs/pendientes-codigo.md).
+
 ## Argumentos especificos para este cliente
 
 1. **Cada unidad es distinta** → kits versionados que se ajustan por vale sin
@@ -97,6 +154,22 @@ contra la que se compara la cotizacion.
 5. **Estan creciendo** → siete puntos de venta; cada uno es ampliacion del
    contrato.
 
+## Que decir sobre la madurez del sistema
+
+**Nunca decir "no tiene errores".** Al 3 de septiembre: cero bloqueantes y cero
+graves conocidos, con siete hallazgos menores abiertos que no se ven en una
+demostracion de quince minutos. No es lo mismo, y prometer de mas es la forma
+mas rapida de perder al cliente en el mes tres.
+
+Lo que si se puede decir, y es cierto:
+
+> "Esta probado de punta a punta: 20 pruebas automatizadas y dos vueltas de
+> revision buscando fallas a proposito. Lo que quede lo corregimos durante la
+> puesta en marcha, que por eso son cuatro semanas y no una."
+
+Si en la junta sale algo raro en pantalla: **no taparlo.** "Eso lo reviso y les
+aviso hoy mismo", y seguir. Intentar disimularlo se nota mucho mas que el error.
+
 ## Documentos publicados
 
 Paginas privadas del usuario, misma identidad visual (acero + ambar,
@@ -105,8 +178,12 @@ Archivo / IBM Plex). Se imprimen limpias a PDF.
 - **Propuesta comercial** — https://claude.ai/code/artifact/cea1099f-c80d-402d-959a-f16954803868
 - **Anexo "Traza en la planta"** (como funciona, diagramas) — https://claude.ai/code/artifact/b89bec37-d699-44ad-aa08-76c5b4a35d64
 
-Pendiente de armar: **guion de la demostracion** (los siete pasos, accesos para
-imprimir en tarjetas, lista de verificacion y plan B).
+- **Guion de la demostracion "Traza en vivo"** — https://claude.ai/code/artifact/70662620-0e7b-481f-b174-92e9a38d145c
+
+El guion reparte la junta en 20 minutos (3 de apertura, 7 de los siete pasos que
+operan ellos, 6 de las cuatro preguntas y los numeros, 4 de cierre), trae lo que
+se dice en cada paso, las respuestas a las ocho objeciones probables, la lista de
+la manana, el plan B y las tarjetas de acceso para imprimir.
 
 Faltan por llenar en la propuesta: telefono del usuario, y sustituir el correo
 personal de iCloud por uno con dominio propio.

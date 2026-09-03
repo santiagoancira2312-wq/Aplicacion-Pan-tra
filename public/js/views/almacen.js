@@ -4,7 +4,7 @@ import {
   h, vaciar, tarjeta, chip, chipEstado, numero, haceRato, cargando, vacio, pestanas
 } from '../ui.js';
 import { icono } from '../iconos.js';
-import { tituloVista } from '../app.js';
+import { tituloVista, alLlegarNotificacion } from '../app.js';
 import { ir } from '../router.js';
 
 const SECCIONES = [
@@ -26,11 +26,18 @@ export async function render() {
   contenedor.appendChild(barra);
   contenedor.appendChild(lista);
   await cargar();
+  // El almacen tiene esta cola abierta todo el dia: cuando un supervisor
+  // autoriza un vale, aparece solo.
+  alLlegarNotificacion(() => cargar({ silencioso: true }));
   return contenedor;
 
-  async function cargar() {
-    vaciar(lista);
-    lista.appendChild(cargando());
+  // En la recarga silenciosa la lista no se vacia mientras llegan los datos:
+  // asi no parpadea ni brinca la pantalla debajo del dedo.
+  async function cargar({ silencioso = false } = {}) {
+    if (!silencioso) {
+      vaciar(lista);
+      lista.appendChild(cargando());
+    }
     const cola = await api.get('/api/almacen/cola');
 
     vaciar(barra);

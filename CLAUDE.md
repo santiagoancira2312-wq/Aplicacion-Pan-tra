@@ -37,6 +37,22 @@ La Terminal debe quedarse abierta mientras se usa la aplicacion. Si el
 navegador dice `localhost refused to connect`, el servidor esta apagado:
 `cd ~/Downloads/demo-vales && npm start`.
 
+### Cuando la app sale a internet por el tunel
+
+La cabecera `X-Forwarded-For` solo se cree si la peticion viene de un proxy
+declarado. En la red local eso no hace falta, pero **detras del tunel hay que
+declararlo**, porque si no todos los visitantes llegan con la misma direccion
+(la del tunel): el limite de peticiones los cuenta como uno solo y la
+restriccion de red deja de distinguir quien esta dentro de la planta.
+
+```bash
+SECURE_COOKIES=1 PROXIES_CONFIANZA=127.0.0.1,::1 npm start
+```
+
+Sin esa variable la cabecera se ignora, que es lo seguro por defecto: creerla
+siempre dejaba que cualquiera la escribiera a mano y con eso se saltara la
+restriccion de red y el limite de peticiones.
+
 ### Accesos de demostracion (ficticios)
 
 | Rol | Acceso | Clave |

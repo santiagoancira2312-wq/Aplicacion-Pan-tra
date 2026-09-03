@@ -1,5 +1,5 @@
 import { all } from '../db.js';
-import { notFound } from '../lib/http.js';
+import { notFound, forbidden } from '../lib/http.js';
 import { requireUser } from './auth.js';
 import { requirePerm, puedeVerCostos } from '../lib/rbac.js';
 import { toCsv, csvFilename } from '../lib/csv.js';
@@ -8,6 +8,14 @@ import { audit } from '../lib/audit.js';
 /**
  * Exportacion a Excel (CSV con BOM). La aplicacion es la fuente de verdad;
  * Excel se usa solo para reportes, analisis e integraciones administrativas.
+ *
+ * El campo `reyna` dice que puede sacar de cada reporte un usuario de la
+ * empresa externa. Antes se filtraba por la columna Empresa, y los reportes
+ * que no la tienen se salvaban enteros del filtro: por ahi salia el consumo
+ * de cada trailer interno con su cliente y modelo.
+ *   'columna'  las filas se filtran por su columna Empresa
+ *   'propio'   el reporte ya es solo de la empresa externa
+ *   (nada)     no esta disponible para la empresa externa
  */
 const REPORTES = {
   inventario: {
@@ -23,6 +31,7 @@ const REPORTES = {
 
   movimientos: {
     permiso: 'movimientos.leer',
+    reyna: 'columna',
     sql: `SELECT mv.created_at AS Fecha, mv.tipo AS Tipo, m.sku AS SKU, m.nombre AS Material,
                  mv.cantidad AS Cantidad, un.codigo AS Unidad, mv.stock_antes AS "Stock antes",
                  mv.stock_despues AS "Stock despues", v.folio AS Folio, t.numero AS Trailer,
@@ -59,6 +68,7 @@ const REPORTES = {
 
   detalle_vales: {
     permiso: 'vales.todos',
+    reyna: 'columna',
     sql: `SELECT v.folio AS Folio, v.created_at AS Fecha, v.estado AS Estado, v.empresa AS Empresa,
                  w.nombre AS Trabajador, t.numero AS Trailer, a.nombre AS Area,
                  vk.nombre_snapshot AS Kit, vk.version_snapshot AS "Version kit",
@@ -81,6 +91,7 @@ const REPORTES = {
 
   trabajadores: {
     permiso: 'usuarios.leer',
+    reyna: 'columna',
     sql: `SELECT u.employee_id AS "ID empleado", u.nombre AS Nombre, u.rol AS Rol, u.empresa AS Empresa,
                  a.nombre AS Area, s.nombre AS Supervisor,
                  CASE u.activo WHEN 1 THEN 'Activo' ELSE 'Inactivo' END AS Estado,
@@ -114,6 +125,7 @@ const REPORTES = {
 
   consumo_reyna: {
     permiso: 'reyna.leer',
+    reyna: 'propio',
     sql: `SELECT mv.created_at AS Fecha, v.folio AS Folio, w.nombre AS Trabajador, t.numero AS Trailer,
                  m.sku AS SKU, m.nombre AS Material, mv.cantidad AS Cantidad, un.codigo AS Unidad,
                  mv.precio_unitario AS Precio,
@@ -173,6 +185,7 @@ export default function register(r) {
     return {
       reportes: Object.entries(REPORTES)
         .filter(([, def]) => {
+          if (user.empresa === 'REYNA' && !def.reyna) return false;
           try { requirePerm(user, def.permiso); return true; } catch { return false; }
         })
         .map(([nombre]) => nombre)
@@ -187,10 +200,13 @@ export default function register(r) {
     if (!def) throw notFound('Reporte no disponible');
     requirePerm(user, def.permiso);
 
-    let filas = all(def.sql);
     // Un usuario de la empresa externa solo exporta su propia informacion.
-    if (user.empresa === 'REYNA') {
-      filas = filas.filter((f) => f.Empresa === undefined || f.Empresa === 'REYNA');
+    if (user.empresa === 'REYNA' && !def.reyna) {
+      throw forbidden('Ese reporte contiene informacion de la empresa interna');
+    }
+    let filas = all(def.sql);
+    if (user.empresa === 'REYNA' && def.reyna === 'columna') {
+      filas = filas.filter((f) => f.Empresa === 'REYNA');
     }
     if (!puedeVerCostos(user) && def.costos) {
       filas = filas.map((f) => {

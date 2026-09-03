@@ -4,7 +4,7 @@
  */
 import { api } from '../api.js';
 import {
-  h, vaciar, tarjeta, chip, cargando, campo, modal, avisoOk, avisoError, tabla, confirmar
+  h, vaciar, tarjeta, chip, cargando, campo, modal, avisoOk, avisoError, tabla, confirmar, alEscribir
 } from '../ui.js';
 import { icono } from '../iconos.js';
 import { tituloVista } from '../app.js';
@@ -59,7 +59,7 @@ export async function render() {
       ),
       [h('button', {
         clase: 'btn btn-primario',
-        onclick: async () => {
+        onclick: alEscribir(async () => {
           const cambios = {};
           for (const [k, input] of campos) cambios[k] = input.value.trim();
           try {
@@ -67,7 +67,7 @@ export async function render() {
             avisoOk(r.aplicados.length ? `Configuracion actualizada (${r.aplicados.length} cambios)` : 'Sin cambios que guardar');
             cargar();
           } catch (err) { avisoError(err.message); }
-        }
+        })
       }, 'Guardar configuracion')]
     ));
 
@@ -81,11 +81,13 @@ export async function render() {
           h('td', {}, chip(m.activo ? 'Activo' : 'Inactivo', m.activo ? 'verde' : 'gris')),
           h('td', {}, h('button', {
             clase: 'btn btn-s',
-            onclick: async () => {
-              await api.put(`/api/admin/motivos-rechazo/${m.id}`, { activo: !m.activo });
-              avisoOk('Motivo actualizado');
-              cargar();
-            }
+            onclick: alEscribir(async () => {
+              try {
+                await api.put(`/api/admin/motivos-rechazo/${m.id}`, { activo: !m.activo });
+                avisoOk('Motivo actualizado');
+                cargar();
+              } catch (err) { avisoError(err.message); }
+            })
           }, m.activo ? 'Desactivar' : 'Activar'))
         ))
       ),
@@ -108,17 +110,19 @@ export async function render() {
           h('td', { clase: 'pequeno', texto: s.last_seen_at }),
           h('td', {}, h('button', {
             clase: 'btn btn-s',
-            onclick: async () => {
+            onclick: alEscribir(async () => {
               const ok = await confirmar({
                 titulo: 'Cerrar sesion',
                 mensaje: `Se cerrara la sesion activa de ${s.nombre}.`,
                 textoOk: 'Cerrar sesion', claseOk: 'btn-rojo'
               });
               if (!ok) return;
-              await api.del(`/api/admin/sesiones/${s.id}`);
-              avisoOk('Sesion cerrada');
-              cargar();
-            }
+              try {
+                await api.del(`/api/admin/sesiones/${s.id}`);
+                avisoOk('Sesion cerrada');
+                cargar();
+              } catch (err) { avisoError(err.message); }
+            })
           }, 'Cerrar'))
         ))
       ), null, { sinRelleno: true }

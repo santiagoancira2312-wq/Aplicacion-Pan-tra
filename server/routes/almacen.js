@@ -104,7 +104,10 @@ export default function register(r) {
     const user = requireUser(ctx);
     requirePerm(user, 'vales.preparar');
     const valeId = Number(ctx.params.id);
-    const detalle = detalleVale(valeId, null);
+    // Con usuario nulo, detalleVale se salta rol, area y empresa. Hoy no es
+    // explotable porque los tres almacenistas del demo son internos, pero el
+    // dia que exista uno de la empresa externa le entregaria cualquier vale.
+    const detalle = detalleVale(valeId, user);
     const lineas = detalle.items
       .filter((i) => i.cantidad_autorizada > 0)
       .map((i) => ({
@@ -181,6 +184,15 @@ export default function register(r) {
       const items = new Map(all('SELECT * FROM vale_items WHERE vale_id = ?', valeId).map((i) => [i.id, i]));
       const aEntregar = [];
 
+      // Dentro de una misma entrega hay que llevar la cuenta de lo que ya se
+      // aparto, porque nada se ha descontado todavia. Un vale puede traer el
+      // mismo material en dos lineas (un kit mas ese material suelto, o dos
+      // kits que lo comparten); si cada linea comparara contra la existencia
+      // inicial, las dos pasarian y el fisico quedaria negativo, que la regla
+      // 3 prohibe. Lo mismo con una linea repetida en la peticion.
+      const apartadoPorMaterial = new Map();
+      const apartadoPorLinea = new Map();
+
       for (const l of lineas) {
         const it = items.get(Number(l.vale_item_id));
         if (!it) throw badRequest('Linea de vale no valida');
@@ -188,14 +200,19 @@ export default function register(r) {
         if (!Number.isFinite(cantidad) || cantidad < 0) throw badRequest(`Cantidad no valida en ${it.nombre_snapshot}`);
         if (cantidad === 0) continue;
 
-        const pendiente = round(it.cantidad_autorizada - it.cantidad_entregada);
+        const yaEnLaLinea = apartadoPorLinea.get(it.id) || 0;
+        const pendiente = round(it.cantidad_autorizada - it.cantidad_entregada - yaEnLaLinea);
         if (cantidad > pendiente) {
           throw badRequest(`No puede entregar mas de lo autorizado en ${it.nombre_snapshot} (pendiente: ${pendiente})`);
         }
         const mat = get('SELECT stock_fisico, costo FROM materiales WHERE id = ?', it.material_id);
-        if (cantidad > mat.stock_fisico) {
-          throw conflict(`Stock fisico insuficiente de ${it.nombre_snapshot}. Existencia: ${mat.stock_fisico}`);
+        const yaDelMaterial = apartadoPorMaterial.get(it.material_id) || 0;
+        const existencia = round(mat.stock_fisico - yaDelMaterial);
+        if (cantidad > existencia) {
+          throw conflict(`Stock fisico insuficiente de ${it.nombre_snapshot}. Existencia: ${existencia}`);
         }
+        apartadoPorLinea.set(it.id, round(yaEnLaLinea + cantidad));
+        apartadoPorMaterial.set(it.material_id, round(yaDelMaterial + cantidad));
         aEntregar.push({ it, cantidad, precio: mat.costo });
       }
 
@@ -229,7 +246,7 @@ export default function register(r) {
              SET cantidad_entregada = ?, precio_unitario = COALESCE(precio_unitario, ?),
                  importe = importe + ?
            WHERE id = ?`,
-          round(it.cantidad_entregada + cantidad), precio, round(cantidad * precio), it.id
+          round(it.cantidad_entregada + apartadoPorLinea.get(it.id)), precio, round(cantidad * precio), it.id
         );
         run(
           'INSERT INTO entrega_items (entrega_id, vale_item_id, cantidad, precio_unitario, importe) VALUES (?, ?, ?, ?, ?)',

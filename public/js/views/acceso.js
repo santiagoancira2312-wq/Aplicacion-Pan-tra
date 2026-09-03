@@ -99,10 +99,18 @@ export async function render({ alEntrar }) {
     );
 
     document.onkeydown = (e) => {
-      if (modo !== 'PIN') return;
+      // El manejador vive en el documento, asi que hay que acotarlo por las dos
+      // vias: la pantalla tiene que seguir puesta, y no se debe estar
+      // escribiendo en un campo. Sin lo segundo, teclear "EMP-001" en el ID
+      // metia sus tres digitos al PIN sin que se notara, y el acceso fallaba
+      // despues sin que nadie entendiera por que.
+      if (modo !== 'PIN' || !puntos.isConnected) return;
+      if (e.key === 'Enter') return enviar();
+      const enCampo = document.activeElement
+        && ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName);
+      if (enCampo) return;
       if (/^\d$/.test(e.key)) teclear(e.key);
-      else if (e.key === 'Backspace' && document.activeElement !== empleado) borrar();
-      else if (e.key === 'Enter') enviar();
+      else if (e.key === 'Backspace') borrar();
     };
 
     return h('div', {},

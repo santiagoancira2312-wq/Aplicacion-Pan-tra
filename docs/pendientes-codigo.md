@@ -94,12 +94,175 @@ Criterios:
 - Verificar con dos navegadores abiertos: crear un vale en uno y ver que el aviso
   aparece solo en el otro, sin recargar.
 
+## [x] 14. Decir "AGOTADO" con todas sus letras al crear un vale
+
+Hoy el buscador de materiales muestra `Disponible: N` y un punto de color con el
+semaforo, y las lineas del vale muestran el disponible. En una iPad, un punto de
+color no comunica "ya no hay".
+
+- En el buscador y en las lineas del vale, cuando el disponible sea 0 o menos,
+  mostrar la palabra **AGOTADO** en texto, no solo el color.
+- Al agregar un material agotado, avisar de forma visible.
+
+**El ciclo real es de minutos, no de dias.** El trabajador pide a las 3:00 y a
+las 3:10 esta en el mostrador del almacen. Lo que no esta en el estante ahora no
+va a estar en diez minutos, asi que el objetivo de este aviso no es informar:
+es **evitarle el viaje en balde**.
+
+Aun asi, **avisar y no bloquear**, por una razon distinta a la de la regla 3: en
+los primeros meses el stock del sistema y el del estante no coinciden. Si dice 0
+y en el rack hay 20, bloquear deja al trabajador sin salida y sin nadie a quien
+reclamar. Que el aviso sea imposible de pasar por alto, y que el decida.
+
+- Antes de enviar el vale, si trae material sin existencia, un aviso claro:
+  cuantas lineas y que el almacen no va a poder entregarlas hoy.
+- Que la lista de surtido del almacen tambien marque esas lineas, para que el
+  almacenista lo sepa antes de que el trabajador llegue.
+
+**No es un detalle cosmetico: es un momento de la demostracion.** Es la unica
+parte del flujo donde se ve, en pantalla y en un segundo, algo que con papel es
+imposible saber sin caminar al almacen y hacer fila.
+
+Solo presentacion: no tocar consultas ni calculos.
+
+## [x] 17. El boton no se desactiva mientras la peticion viaja (hallazgos 11 y 19)
+
+**Antes de la junta.** Segunda vuelta de pruebas. El chat de pruebas los marco
+como menores; para esta demostracion no lo son: es lo mas probable que salga
+mal frente al cliente.
+
+Un mismo error visto en dos pantallas: el boton sigue activo mientras la
+peticion esta en camino, asi que un segundo toque manda la operacion otra vez.
+
+- **Hallazgo 11.** Doble toque en ENVIAR VALE crea dos vales identicos. Con la
+  red lenta bastan 400 ms de separacion. El supervisor se encuentra dos
+  solicitudes iguales que tiene que resolver por separado.
+- **Hallazgo 19.** Lo mismo en la pantalla de entregas: el segundo clic recibe
+  409 y se pinta **un aviso rojo encima de una entrega que si funciono**. El
+  inventario queda correcto, pero el almacenista y quien vea su pantalla creen
+  que fallo.
+
+Por que importa justo ahora: la demostracion corre **sobre un tunel**, mas lento
+que la red local, asi que la ventana para el segundo toque se ensancha; y quien
+va a tocar el boton es alguien que nunca ha visto la app, que es exactamente
+quien vuelve a tocar cuando algo no responde al instante.
+
+Que hacer:
+
+- Desactivar el boton en cuanto arranca la peticion y reactivarlo al terminar,
+  **tanto si sale bien como si falla**, para no dejarlo muerto.
+- Indicar visualmente que esta trabajando, para que la persona no sienta que no
+  paso nada.
+- Aplicarlo a **todas** las acciones que escriben: enviar vale, autorizar,
+  preparar, entregar, devolver, cerrar, y los formularios de alta y edicion.
+- No pintar en rojo una operacion que si se completo: un 409 de duplicado sobre
+  una entrega ya registrada no es un fallo que reportarle al usuario.
+
+Es cambio de interfaz, aditivo. No tocar la logica del servidor.
+
+## [x] 18. Digitos fuera del campo entran al PIN (hallazgo 18)
+
+**Solo si la tarea 17 sale limpia y sobra tiempo.** El manejador de teclado esta
+en el documento y no en el campo, asi que cualquier digito escrito en la pantalla
+de acceso entra al PIN. Barato de arreglar, pero es la pantalla que todos tocan
+primero y cualquier cambio ahi se nota.
+
+## Hallazgos que NO se arreglan antes de la junta
+
+De la segunda vuelta quedan abiertos los **12, 13, 14, 15, 17 y 20** (numeracion
+de `docs/hallazgos.md`). Nadie va a escribir `1e15`, ni pegar 5,000 caracteres,
+ni cambiar un costo por la API, ni tener una sesion de administrador abierta
+para sobrescribir un 2FA. El **16** ya esta resuelto por operacion, arrancando
+con `SECURE_COOKIES=1`.
+
+## [ ] 19. Cambiar el segundo factor debe pedir la contrasena y quedar en auditoria (hallazgo 14)
+
+**Antes de la junta.** No por el riesgo de que pase, sino porque **contradice lo
+que se afirma en la demostracion**.
+
+Con una sesion de administrador ya abierta, `2fa/iniciar` sobrescribe el secreto
+del segundo factor sin pedir la contrasena, deja fuera al administrador legitimo
+y **no queda registrado en auditoria**.
+
+En el paso 7 del guion se abre Auditoria y se dice que todo cambio critico queda
+con usuario, hora y valor anterior. La regla 12. Este es un cambio critico que no
+queda. Es la misma clase de problema que la restriccion del almacen: el codigo
+tiene que decir lo que se afirma.
+
+- Pedir la contrasena actual (y el codigo vigente, si ya tiene 2FA activo) antes
+  de iniciar o reemplazar el segundo factor.
+- Registrar en auditoria el alta, el reemplazo y la desactivacion.
+- Revisar de paso `2fa/activar` y `2fa/desactivar`, que son del mismo grupo.
+
+**Cuidado: esto toca el acceso del administrador, que es la cuenta que se usa en
+la demostracion.** Al terminar, entrar y salir con `admin@demo.local` y con
+`direccion@demo.local`, con y sin 2FA activo. Si algo queda dudoso, revertir:
+vale mas el hallazgo abierto que quedarse fuera de la app en la junta.
+
+## [ ] 20. Tope de cantidad en los vales (hallazgo 12)
+
+**Antes de la junta.** Un vale acepta `1e15` piezas. Las entradas de almacen ya
+tienen tope desde el grupo 1; los vales no.
+
+Riesgo real: alguien de Panamerican, que ve la app por primera vez, teclea de mas
+en una cantidad. Si se autoriza, la pantalla de inventario queda con numeros
+imposibles delante de todos.
+
+Usar el mismo patron y el mismo tope que ya se puso en las entradas, para que el
+mensaje de error sea consistente. Aplica al crear el vale y al autorizar.
+
+## Hallazgos que quedan abiertos a proposito
+
+Despues de las tareas 19 y 20 quedan cinco: **13, 15, 16, 17 y 20** de
+`docs/hallazgos.md`. Ninguno se ve en una demostracion de quince minutos. El 16
+se resuelve arrancando con `SECURE_COOKIES=1`.
+
+**Que quede claro para cualquier chat que lea esto: la aplicacion NO esta libre
+de errores.** No tiene bloqueantes ni graves conocidos, que no es lo mismo. Y el
+chat de pruebas lo dijo bien: que el no encuentre mas no significa que no haya
+mas &mdash; encontro 23 en la primera vuelta y uno se le escapo hasta la segunda.
+
 ---
 
 # DESPUES DE LA PRESENTACION
 
 Estas tareas suben el valor del producto. **No empezarlas antes de la junta:**
 la app esta terminada y probada, y una funcion nueva agrega riesgo, no valor.
+
+## [ ] 15. Cerrar una linea del vale, y sustituir un material
+
+Nace de dos peticiones reales: el trabajador ya no necesita un material, o se
+equivoco de material y el almacenista lo descubre en el mostrador.
+
+**Lo que NO se hace: dejar que el almacen edite o borre la linea.** Rompe la
+regla 1 (las cuatro cantidades no se sobrescriben) y la 12 (no se borra
+informacion historica). Un almacenista que puede borrar lineas del vale de otro
+es el agujero que ya tenia el papel.
+
+**Ya no lo necesita** -> cerrar esa linea con motivo, entregada = 0, el resto del
+vale sigue vivo. Ya existe `POST /api/almacen/vales/:id/cerrar-pendiente` pero
+cierra el vale completo; falta poder cerrar **una sola linea**. La infraestructura
+esta: `estado_linea = 'CERRADA'` y `motivo_linea` ya existen en el esquema.
+
+**Se equivoco de material** -> sustitucion, no edicion. La linea original se
+cierra con motivo, y se agrega una linea nueva marcada como sustitucion de
+aquella. Las dos quedan en el vale y en la auditoria.
+
+Reglas:
+
+- Motivo obligatorio, de una lista corta y configurable (ya existe la tabla
+  `motivos_rechazo`, ver si sirve o hace falta una propia).
+- **Notificar al trabajador y al supervisor en el momento.** El almacenista puede
+  cerrar la linea, pero la decision no es suya: la trazabilidad resuelve el
+  problema de autoridad. Las notificaciones en vivo ya funcionan.
+- La **sustitucion la confirma el supervisor**, porque cambia el costo del
+  trailer. Configurable desde Configuracion, activado por defecto.
+- Todo a auditoria con usuario, motivo, linea anterior y linea nueva.
+- El comprometido y el disponible se recalculan al cerrar la linea.
+
+Efecto secundario que vale dinero: con esto se puede contar cuantas veces se
+pidio mal cada material. Senala nombres confusos, kits mal armados y gente que
+necesita capacitacion. Ese dato hoy no existe en ningun lado.
 
 ## [ ] 4. Fotos de materiales
 
@@ -116,6 +279,24 @@ se lee en la vista de inventario. Falta el almacenamiento de archivos.
 
 Es la funcion de mas valor por hora de trabajo y la unica de esta seccion que no
 depende de HTTPS.
+
+## [ ] 16. La sesion del supervisor no puede durar 5 minutos
+
+Sale del ritmo real de la planta: el trabajador pide a las 3:00 y a las 3:10
+esta en el almacen, asi que **el supervisor esta en la ruta critica** y tiene que
+autorizar dentro de esa ventana. Con la sesion de 5 minutos, mete su PIN cada
+vez que le llega un vale. En tres dias lo odia y vuelve al papel.
+
+Su telefono es personal, no una iPad compartida de planta: la sesion corta se
+diseno para las iPads, y al supervisor no le aplica la misma razon.
+
+- Separar el tiempo de sesion por rol, configurable desde Configuracion.
+  Trabajador y almacen (iPads compartidas) se quedan cortos; supervisor mucho
+  mas largo.
+- Cuidado: el supervisor sigue entrando con PIN, asi que no basta con cambiar
+  `sesion_pin_minutos`, que hoy aplica a los tres roles por igual.
+
+Va junto con la tarea 5, que resuelve lo mismo para direccion y gerencia.
 
 ## [ ] 5. Sesiones largas en dispositivos de confianza
 
@@ -223,7 +404,7 @@ racks.
 
 ---
 
-## [ ] 9. Que la lista abierta se refresque sola
+## [x] 9. Que la lista abierta se refresque sola
 
 **Antes de la presentacion.** Salio al probar la tarea 3 en el telefono: al
 supervisor le llega el aviso y el contador, pero si tiene la pantalla de
@@ -253,6 +434,100 @@ Cuidados:
 
 Es aditivo: si esto falla, todo lo demas sigue funcionando igual. Si se complica,
 dejarlo fuera y avisar.
+
+---
+
+# HALLAZGOS DE PRUEBAS — arreglar antes de la junta
+
+El chat de pruebas reporto 23 hallazgos en `docs/hallazgos.md`, con el numero,
+la reproduccion y el comando exacto de cada uno. **Ese archivo es la fuente;
+aqui solo va el orden y el criterio.**
+
+Verificados a mano antes de escribir esto: el bloqueante (los dos bucles de
+`server/routes/almacen.js` comparan contra el mismo stock inicial) y el
+hallazgo 4 (`/api/dashboard` llama a `requireUser` pero nunca a
+`requirePerm(user, 'dashboard.leer')`). El reporte es confiable, pero **cada
+arreglo debe empezar por reproducir el fallo**, para poder escribir la prueba.
+
+Van en cuatro grupos, en este orden. **Cada grupo es un commit aparte con sus
+pruebas.** Si se acaba el tiempo, se para al terminar un grupo, nunca a la mitad.
+
+## [x] 10. Grupo 1 — Integridad de inventario (hallazgos 1 y 8)
+
+Lo mas grave y lo mas delicado de tocar, porque es el flujo central.
+
+- **Hallazgo 1 (BLOQUEANTE).** En `POST /api/almacen/vales/:id/entregar`, el
+  bucle que valida corre completo antes del que aplica, asi que dos lineas del
+  mismo material comparan contra la misma existencia y las dos pasan. Llevar la
+  cuenta de lo ya comprometido dentro de la misma entrega, o validar y aplicar
+  material por material dentro de la transaccion. **El stock fisico no puede
+  quedar negativo por ninguna via** (regla 3).
+- **Hallazgo 8.** Validar cantidades y costos en las entradas de almacen:
+  nada de costos negativos ni cantidades absurdas.
+
+Pruebas de regresion obligatorias para los dos. Al terminar, **recorrer el flujo
+completo de la demostracion** (crear, autorizar parcial, entregar parcial con
+firma) para confirmar que no se rompio nada.
+
+## [x] 11. Grupo 2 — Alcance y permisos (hallazgos 3, 4, 5, 6 y 7)
+
+Son cinco caras del mismo problema y conviene arreglarlos juntos. Importan
+doble: ademas de ser fallas, **contradicen lo que la propuesta le promete al
+cliente** sobre separacion por rol y por empresa.
+
+- **4.** `/api/dashboard` no comprueba `dashboard.leer` ni filtra por empresa.
+- **3.** El buscador global deja ver vales y personal interno a un usuario de la
+  empresa externa.
+- **7.** La exportacion a Excel deja sacar informacion interna a la empresa
+  externa.
+- **5.** Llegan importes en pesos a quien no tiene `costos.leer`.
+- **6.** El consumo por area mezcla las dos empresas y no pide permiso.
+
+Regla al arreglar: **el permiso y el alcance por empresa se comprueban en el
+servidor, en cada endpoint.** Que la interfaz no muestre un boton no es
+proteccion. Revisar de paso los hallazgos 17 y 18, que son de la misma familia.
+
+## [x] 12. Grupo 3 — Lo que se ve en la demostracion (hallazgos 9, 10, 21 y 23)
+
+- **9.** El vale no aparece en Autorizaciones sin recargar. **Es la tarea 9 de
+  arriba**; si ya se hizo, marcar las dos.
+- **10.** El contador junto a "Autorizaciones" no cuenta vales pendientes.
+- **21.** En telefono se ven tres pestanas y hay seis. El chat de pruebas lo
+  puso como cosmetico; **no lo es para esta junta**: todos van a andar en
+  telefono y la mitad de la navegacion esta escondida.
+- **23.** La pantalla de crear vale mide casi 5,000 px con un kit. El paso que
+  debe tomar menos de un minuto se vuelve un desfile de scroll en telefono.
+
+## [x] 13. Grupo 4 — El tunel publico (hallazgo 2)
+
+Durante la junta la app sale a internet por un tunel, asi que esto deja de ser
+teorico.
+
+**Hallazgo 2.** La cabecera `X-Forwarded-For` se puede falsificar y con eso se
+salta la restriccion de red y el limite de peticiones (`server/lib/http.js`,
+funcion `clientIp`).
+
+**Cuidado al arreglarlo:** ignorar la cabecera por completo rompe la
+demostracion, porque detras del tunel todo el mundo llegaria con la misma IP y
+el limite de peticiones los tumbaria a todos. La cabecera debe respetarse
+**solo cuando la peticion viene de un proxy de confianza configurado**, y usar
+la direccion del socket en cualquier otro caso.
+
+## Lo que NO se arregla antes de la junta
+
+Hallazgos **11 a 20** (menos el 16, ver abajo) y el **22**. Son molestias que
+nadie va a notar en quince minutos, y cada cambio extra es riesgo.
+
+Dos aclaraciones:
+
+- **Hallazgo 16** (cookie sin `Secure`) no es un error: es la configuracion
+  local sobre `http`. Al publicar por el tunel hay que arrancar con
+  `SECURE_COOKIES=1`. Es operacion, no codigo.
+- **Hallazgo 13** (reemplazar el segundo factor con una sesion abierta) se
+  arregla en cuanto haya tiempo, pero no bloquea la junta: requiere una sesion
+  de administrador ya abierta.
+
+---
 
 ## Fuera del codigo, pero bloquea las tareas 6 y 7
 

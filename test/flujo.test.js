@@ -343,6 +343,220 @@ test('el almacen nunca entrega mas de lo que hay en existencia', async () => {
   assert.match(entrega.datos.error, /insuficiente/i);
 });
 
+test('el mismo material en dos lineas no deja el stock fisico negativo', async () => {
+  // Hallazgo 1. Un vale puede traer el mismo material dos veces (un kit mas el
+  // mismo material suelto). Si cada linea compara contra la existencia inicial,
+  // las dos pasan y el fisico queda negativo, que la regla 3 prohibe.
+  const inv = await api('GET', '/api/inventario', undefined, 'admin');
+  const material = inv.datos.inventario.find((m) => m.stock_fisico > 0 && m.stock_fisico < 500);
+  assert.ok(material, 'hace falta un material con existencia para la prueba');
+  const existencia = material.stock_fisico;
+
+  const catalogos = await api('GET', '/api/catalogos', undefined, 'admin');
+  const creado = await api('POST', '/api/vales', {
+    trailer_id: catalogos.datos.trailers[0].id,
+    items: [
+      { material_id: material.id, cantidad: existencia },
+      { material_id: material.id, cantidad: existencia }
+    ]
+  }, 'admin');
+  assert.equal(creado.status, 200);
+  assert.equal(creado.datos.items.length, 2, 'el vale debe quedar con dos lineas del mismo material');
+
+  await api('POST', `/api/vales/${creado.datos.id}/autorizar`, { decision: 'APROBAR' }, 'admin');
+
+  const firma = 'data:image/png;base64,' + Buffer.from(`doble-${Date.now()}-${'z'.repeat(500)}`).toString('base64');
+  const entrega = await api('POST', `/api/almacen/vales/${creado.datos.id}/entregar`, {
+    receptor_nombre: 'Prueba', firma,
+    lineas: creado.datos.items.map((i) => ({ vale_item_id: i.id, cantidad: existencia }))
+  }, 'admin');
+  assert.equal(entrega.status, 409, 'la segunda linea debe rechazarse por existencia insuficiente');
+  assert.match(entrega.datos.error, /insuficiente/i);
+
+  // Y sobre todo: la existencia no se toco y no quedo negativa.
+  const despues = await api('GET', `/api/materiales/${material.id}`, undefined, 'admin');
+  assert.ok(despues.datos.material.stock_fisico >= 0, 'el stock fisico nunca puede ser negativo');
+  assert.equal(despues.datos.material.stock_fisico, existencia, 'una entrega rechazada no descuenta nada');
+});
+
+test('la misma linea repetida en una entrega no descuenta dos veces', async () => {
+  // Variante del hallazgo 1 por la API: la misma linea del vale enviada dos
+  // veces en la misma peticion no debe entregar mas de lo autorizado.
+  const inv = await api('GET', '/api/inventario', undefined, 'admin');
+  const material = inv.datos.inventario.find((m) => m.stock_fisico > 40);
+  assert.ok(material, 'hace falta un material con existencia para la prueba');
+
+  const catalogos = await api('GET', '/api/catalogos', undefined, 'admin');
+  const creado = await api('POST', '/api/vales', {
+    trailer_id: catalogos.datos.trailers[0].id,
+    items: [{ material_id: material.id, cantidad: 10 }]
+  }, 'admin');
+  await api('POST', `/api/vales/${creado.datos.id}/autorizar`, { decision: 'APROBAR' }, 'admin');
+
+  const antes = (await api('GET', `/api/materiales/${material.id}`, undefined, 'admin')).datos.material.stock_fisico;
+  const firma = 'data:image/png;base64,' + Buffer.from(`repetida-${Date.now()}-${'w'.repeat(500)}`).toString('base64');
+  const entrega = await api('POST', `/api/almacen/vales/${creado.datos.id}/entregar`, {
+    receptor_nombre: 'Prueba', firma,
+    lineas: [
+      { vale_item_id: creado.datos.items[0].id, cantidad: 10 },
+      { vale_item_id: creado.datos.items[0].id, cantidad: 10 }
+    ]
+  }, 'admin');
+  assert.equal(entrega.status, 400, 'la segunda copia excede lo autorizado');
+  assert.match(entrega.datos.error, /autorizado/i);
+
+  const despues = (await api('GET', `/api/materiales/${material.id}`, undefined, 'admin')).datos.material.stock_fisico;
+  assert.equal(despues, antes, 'una entrega rechazada no descuenta nada');
+});
+
+test('una entrada de almacen rechaza costos negativos y cantidades absurdas', async () => {
+  // Hallazgo 8. La cantidad solo se validaba > 0 y el costo no se validaba:
+  // una entrada podia multiplicar la existencia y grabar un importe negativo
+  // de millones, que en la demostracion queda a la vista en el panel.
+  const inv = await api('GET', '/api/inventario', undefined, 'admin');
+  const material = inv.datos.inventario[0];
+  const antes = (await api('GET', `/api/materiales/${material.id}`, undefined, 'admin')).datos.material;
+
+  const entrada = (items) => api('POST', '/api/entradas', { items }, 'admin');
+
+  const negativo = await entrada([{ material_id: material.id, cantidad: 10, costo: -500 }]);
+  assert.equal(negativo.status, 400, 'un costo negativo debe rechazarse');
+  assert.match(negativo.datos.error, /costo/i);
+
+  const absurda = await entrada([{ material_id: material.id, cantidad: 100000000, costo: 10 }]);
+  assert.equal(absurda.status, 400, 'una cantidad absurda debe rechazarse');
+  assert.match(absurda.datos.error, /cantidad/i);
+
+  const costoCarisimo = await entrada([{ material_id: material.id, cantidad: 1, costo: 99999999999 }]);
+  assert.equal(costoCarisimo.status, 400, 'un costo absurdo debe rechazarse');
+
+  const costoTexto = await entrada([{ material_id: material.id, cantidad: 1, costo: 'abc' }]);
+  assert.equal(costoTexto.status, 400, 'un costo no numerico se rechaza, no revienta el servidor');
+
+  // Ninguna de las cuatro toco el inventario ni el costo del material.
+  const despues = (await api('GET', `/api/materiales/${material.id}`, undefined, 'admin')).datos.material;
+  assert.equal(despues.stock_fisico, antes.stock_fisico, 'una entrada rechazada no mueve la existencia');
+  assert.equal(despues.costo, antes.costo, 'una entrada rechazada no cambia el costo');
+
+  // Y una entrada normal sigue funcionando.
+  const buena = await entrada([{ material_id: material.id, cantidad: 5, costo: antes.costo }]);
+  assert.equal(buena.status, 200);
+  const final = (await api('GET', `/api/materiales/${material.id}`, undefined, 'admin')).datos.material;
+  assert.equal(final.stock_fisico, antes.stock_fisico + 5);
+});
+
+test('el alcance por rol y por empresa se comprueba en el servidor', async () => {
+  // Hallazgos 3, 4, 5, 6, 7, 17 y 18. Que la interfaz no muestre un boton no es
+  // proteccion: cada endpoint tiene que comprobar permiso y empresa.
+  await api('POST', '/api/auth/login-pin', { employee_id: 'RSU-01', pin: '400010' }, 'reynasup');
+  await api('POST', '/api/auth/login-pin', { employee_id: 'EMP-001', pin: '300001' }, 'emp');
+  await api('POST', '/api/auth/login-pin', { employee_id: 'SUP-01', pin: '100001' }, 'sup');
+
+  // 4. El panel ejecutivo pide permiso y no cruza empresas.
+  const panelTrabajador = await api('GET', '/api/dashboard', undefined, 'emp');
+  assert.equal(panelTrabajador.status, 403, 'un trabajador no tiene panel ejecutivo');
+  const panelExterno = await api('GET', '/api/dashboard', undefined, 'reynasup');
+  if (panelExterno.status === 200) {
+    for (const a of panelExterno.datos.actividad || []) {
+      assert.equal(a.empresa, 'REYNA', 'el panel de la empresa externa no muestra vales internos');
+    }
+  }
+
+  // 3. El buscador global respeta el alcance.
+  const buscarVales = await api('GET', '/api/buscar?q=PT-2026', undefined, 'reynasup');
+  assert.equal(buscarVales.status, 200);
+  const suyos = new Set((await api('GET', '/api/vales?empresa=REYNA&limit=500', undefined, 'admin'))
+    .datos.vales.map((v) => v.folio));
+  const encontrados = buscarVales.datos.resultados.filter((x) => x.tipo === 'VALE');
+  assert.ok(encontrados.length, 'el buscador debe encontrar sus propios vales');
+  for (const v of encontrados) {
+    assert.ok(suyos.has(v.titulo), `${v.titulo} no es de la empresa externa y no deberia aparecer`);
+  }
+  const buscarPersona = await api('GET', '/api/buscar?q=Kevin', undefined, 'reynasup');
+  assert.equal(buscarPersona.datos.resultados.filter((x) => x.tipo === 'PERSONA').length, 0,
+    'la empresa externa no debe ver personal interno');
+
+  // 5. Sin permiso de costos no llegan importes, ni escondidos en el JSON.
+  const kits = await api('GET', '/api/analitica/kits', undefined, 'sup');
+  assert.equal(kits.status, 200);
+  for (const k of kits.datos.kits) {
+    for (const campo of ['costo_estandar', 'costo_real', 'variacion_costo']) {
+      assert.equal(k[campo], undefined, `el supervisor no debe recibir ${campo}`);
+    }
+  }
+
+  // 6. El consumo por area pide permiso y filtra por empresa.
+  assert.equal((await api('GET', '/api/analitica/area', undefined, 'emp')).status, 403,
+    'el consumo por area pide permiso');
+  const areaExterna = await api('GET', '/api/analitica/area', undefined, 'reynasup');
+  assert.equal(areaExterna.status, 200);
+  if (areaExterna.datos.area_id) {
+    const propios = await api('GET',
+      `/api/vales?area_id=${areaExterna.datos.area_id}&empresa=REYNA&limit=1`, undefined, 'admin');
+    const todos = await api('GET',
+      `/api/vales?area_id=${areaExterna.datos.area_id}&limit=1`, undefined, 'admin');
+    assert.ok(propios.datos.total < todos.datos.total, 'el area debe tener vales de las dos empresas');
+    assert.equal(areaExterna.datos.vales.total, propios.datos.total,
+      'el consumo por area solo cuenta los vales de su empresa');
+  }
+
+  // 7. La exportacion no deja sacar informacion de la otra empresa.
+  const consumoTrailer = await fetch(`${BASE}/api/exportar/consumo_trailer`, {
+    headers: { Cookie: cookies.get('reynasup') }
+  });
+  assert.equal(consumoTrailer.status, 403,
+    'la empresa externa no exporta el consumo de los trailers internos');
+  const listaReportes = await api('GET', '/api/exportar', undefined, 'reynasup');
+  for (const reporte of listaReportes.datos.reportes) {
+    assert.ok(['movimientos', 'detalle_vales', 'trabajadores', 'consumo_reyna'].includes(reporte),
+      `el reporte ${reporte} no deberia ofrecerse a la empresa externa`);
+  }
+
+  // 17. Los catalogos con datos de proveedores piden permiso.
+  assert.equal((await api('GET', '/api/proveedores', undefined, 'emp')).status, 403,
+    'un trabajador no lista proveedores con su contacto');
+
+  // 18. La lista de surtido comprueba alcance, no se arma con usuario nulo.
+  const cola = await api('GET', '/api/almacen/cola', undefined, 'almacen');
+  if (cola.status === 200 && (cola.datos.nuevos || []).length) {
+    const ajeno = cola.datos.nuevos[0].id;
+    const prep = await api('GET', `/api/almacen/vales/${ajeno}/preparacion`, undefined, 'reynasup');
+    assert.equal(prep.status, 403, 'la empresa externa no arma la lista de surtido de un vale interno');
+  }
+});
+
+test('el trabajador recibe el disponible para saber que esta agotado', async () => {
+  // Tarea 14. La palabra AGOTADO se pinta en el navegador a partir de este
+  // dato: si algun dia deja de venir, el aviso desaparece sin que nada falle.
+  await api('POST', '/api/auth/login-pin', { employee_id: 'EMP-001', pin: '300001' }, 'emp14');
+
+  const busqueda = await api('GET', '/api/materiales?q=a&limit=10', undefined, 'emp14');
+  assert.equal(busqueda.status, 200);
+  assert.ok(busqueda.datos.materiales.length, 'la busqueda debe devolver materiales');
+  for (const m of busqueda.datos.materiales) {
+    assert.equal(typeof m.disponible, 'number', `${m.sku} debe traer disponible`);
+  }
+
+  const kits = await api('GET', '/api/kits', undefined, 'emp14');
+  const kit = kits.datos.kits.find((k) => k.version_id);
+  const version = await api('GET', `/api/kits/version/${kit.version_id}`, undefined, 'emp14');
+  assert.ok(version.datos.items.length);
+  for (const i of version.datos.items) {
+    assert.equal(typeof i.disponible, 'number', `${i.sku} del kit debe traer disponible`);
+  }
+
+  // Y la lista de surtido del almacen necesita la existencia fisica.
+  const cola = await api('GET', '/api/almacen/cola', undefined, 'almacen');
+  const alguno = [...(cola.datos.nuevos || []), ...(cola.datos.preparados || [])][0];
+  if (alguno) {
+    const prep = await api('GET', `/api/almacen/vales/${alguno.id}/preparacion`, undefined, 'almacen');
+    assert.equal(prep.status, 200);
+    for (const l of prep.datos.lineas) {
+      assert.equal(typeof l.stock_fisico, 'number', `${l.sku_snapshot} debe traer existencia fisica`);
+    }
+  }
+});
+
 test('la exportacion a Excel entrega CSV', async () => {
   const res = await fetch(`${BASE}/api/exportar/inventario`, { headers: { Cookie: cookies.get('admin') } });
   assert.equal(res.status, 200);
@@ -405,6 +619,63 @@ test('la restriccion de red tambien aplica al almacen', async () => {
     assert.equal(almacenDentro.status, 200, 'el almacen si entra desde la planta');
     assert.equal(almacenDentro.datos.user.rol, 'ALMACEN');
   } finally {
+    await configurar({
+      restriccion_red_activa: restriccionOriginal,
+      redes_permitidas: redesOriginales
+    });
+  }
+});
+
+test('la cabecera X-Forwarded-For solo se cree si viene de un proxy de confianza', async () => {
+  // Hallazgo 2. Con la aplicacion publicada por un tunel, cualquiera que tenga
+  // la direccion podia poner esa cabecera a mano y saltarse la restriccion de
+  // red de la planta y el limite de peticiones.
+  const antes = await api('GET', '/api/admin/configuracion', undefined, 'admin');
+  const valorPrevio = (clave) => {
+    const fila = antes.datos.configuracion.find((c) => c.key === clave);
+    return fila ? fila.value : antes.datos.valores_por_defecto[clave];
+  };
+  const redesOriginales = valorPrevio('redes_permitidas');
+  const restriccionOriginal = valorPrevio('restriccion_red_activa');
+  const configurar = (configuracion) =>
+    api('PUT', '/api/admin/configuracion', { configuracion }, 'admin');
+
+  const entrar = (base, cabeceras) => fetch(`${base}/api/auth/login-pin`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...cabeceras },
+    body: JSON.stringify({ employee_id: 'EMP-002', pin: '300002' })
+  });
+
+  // Un segundo servidor sobre los mismos datos, este si con un proxy declarado.
+  const PUERTO2 = PORT + 1;
+  const BASE2 = `http://127.0.0.1:${PUERTO2}`;
+  const conProxy = spawn(process.execPath, ['server/index.js'], {
+    env: { ...process.env, DATA_DIR, PORT: String(PUERTO2), NODE_NO_WARNINGS: '1', PROXIES_CONFIANZA: '127.0.0.1,::1' },
+    stdio: 'ignore'
+  });
+
+  try {
+    await configurar({ restriccion_red_activa: '1', redes_permitidas: '192.168.50.0/24' });
+    for (let i = 0; i < 60; i++) {
+      try { await fetch(`${BASE2}/api/auth/estado`); break; } catch { await new Promise((r) => setTimeout(r, 100)); }
+    }
+
+    // Sin proxy declarado la cabecera se ignora: sigue bloqueado.
+    assert.equal((await entrar(BASE, {})).status, 403, 'sin la cabecera debe bloquear');
+    assert.equal((await entrar(BASE, { 'X-Forwarded-For': '192.168.50.9' })).status, 403,
+      'la cabecera inventada no debe abrir la puerta');
+    assert.equal((await entrar(BASE, { 'X-Forwarded-For': '192.168.50.9, 10.0.0.1' })).status, 403,
+      'ni con una cadena de direcciones');
+
+    // Declarando el proxy si se respeta, que es como funciona detras del tunel.
+    assert.equal((await entrar(BASE2, { 'X-Forwarded-For': '192.168.50.9' })).status, 200,
+      'con un proxy de confianza la cabecera si vale');
+    assert.equal((await entrar(BASE2, { 'X-Forwarded-For': '8.8.8.8' })).status, 403,
+      'y sigue bloqueando a quien de verdad esta fuera');
+    assert.equal((await entrar(BASE2, {})).status, 403,
+      'sin cabecera detras del proxy manda la direccion del socket');
+  } finally {
+    conProxy.kill();
     await configurar({
       restriccion_red_activa: restriccionOriginal,
       redes_permitidas: redesOriginales

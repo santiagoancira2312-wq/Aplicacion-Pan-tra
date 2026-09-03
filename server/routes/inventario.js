@@ -6,6 +6,7 @@ import { audit } from '../lib/audit.js';
 import { generarFolio } from '../lib/folio.js';
 import { aplicarMovimiento } from './almacen.js';
 import { redondearPorUnidad } from '../lib/unidades.js';
+import { MAX_CANTIDAD_MOVIMIENTO, MAX_COSTO_UNITARIO } from '../config.js';
 
 export default function register(r) {
   // -------------------------------------------------------------------------
@@ -135,7 +136,18 @@ export default function register(r) {
         if (!mat) throw badRequest('Material no valido en la entrada');
         const cantidad = redondearPorUnidad(Number(it.cantidad), mat.unidad_id);
         if (!Number.isFinite(cantidad) || cantidad <= 0) throw badRequest(`Cantidad no valida para ${mat.nombre}`);
+        if (cantidad > MAX_CANTIDAD_MOVIMIENTO) {
+          throw badRequest(
+            `La cantidad de ${mat.nombre} es demasiado alta (maximo ${MAX_CANTIDAD_MOVIMIENTO} por linea). Revise si sobra un cero.`
+          );
+        }
         const costo = it.costo !== undefined && it.costo !== null && it.costo !== '' ? Number(it.costo) : mat.costo;
+        if (!Number.isFinite(costo) || costo < 0) {
+          throw badRequest(`Costo no valido para ${mat.nombre}: no puede ser negativo ni quedar vacio`);
+        }
+        if (costo > MAX_COSTO_UNITARIO) {
+          throw badRequest(`El costo de ${mat.nombre} es demasiado alto (maximo ${MAX_COSTO_UNITARIO} por unidad)`);
+        }
 
         run(
           'INSERT INTO entrada_items (entrada_id, material_id, cantidad, costo, unidad_id) VALUES (?, ?, ?, ?, ?)',

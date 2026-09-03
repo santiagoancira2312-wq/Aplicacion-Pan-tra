@@ -9,7 +9,7 @@ import {
   vacio, modal, avisoOk, avisoError, pestanas, tabla
 } from '../ui.js';
 import { icono } from '../iconos.js';
-import { tituloVista, estado, actualizarPendientes } from '../app.js';
+import { tituloVista, estado, actualizarPendientes, alLlegarNotificacion } from '../app.js';
 import { ir } from '../router.js';
 
 export async function render() {
@@ -23,11 +23,18 @@ export async function render() {
   contenedor.appendChild(barra);
   contenedor.appendChild(lista);
   await cargar();
+  // El supervisor se queda parado en esta pantalla esperando: cuando entra un
+  // vale nuevo, la lista se actualiza sola.
+  alLlegarNotificacion(() => cargar({ silencioso: true }));
   return contenedor;
 
-  async function cargar() {
-    vaciar(lista);
-    lista.appendChild(cargando());
+  // En la recarga silenciosa la lista no se vacia mientras llegan los datos:
+  // asi no parpadea ni brinca la pantalla debajo del dedo.
+  async function cargar({ silencioso = false } = {}) {
+    if (!silencioso) {
+      vaciar(lista);
+      lista.appendChild(cargando());
+    }
     const [{ vales }, resumen] = await Promise.all([
       api.get(`/api/vales?estado=${filtro}&limit=100`),
       api.get('/api/vales/resumen')

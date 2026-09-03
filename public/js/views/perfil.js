@@ -1,7 +1,7 @@
 /** Perfil del usuario: datos, cambio de PIN o contrasena y verificacion en dos pasos. */
 import { api } from '../api.js';
 import {
-  h, vaciar, tarjeta, chip, kpi, cargando, campo, modal, avisoOk, avisoError, iniciales
+  h, vaciar, tarjeta, chip, kpi, cargando, campo, modal, avisoOk, avisoError, iniciales, alEscribir
 } from '../ui.js';
 import { tituloVista, estado, cerrarSesion } from '../app.js';
 
@@ -40,7 +40,7 @@ export async function render() {
   if (['ADMIN', 'DIRECCION', 'SUPERVISOR'].includes(u.rol)) {
     acciones.push(h('button', {
       clase: u.twofa_enabled ? 'btn' : 'btn btn-primario',
-      onclick: u.twofa_enabled ? desactivar2fa : activar2fa
+      onclick: u.twofa_enabled ? desactivar2fa : alEscribir(activar2fa)
     }, u.twofa_enabled ? 'Desactivar verificacion en dos pasos' : 'Activar verificacion en dos pasos'));
   }
   acciones.push(h('button', { clase: 'btn btn-oscuro', onclick: () => cerrarSesion() }, 'CERRAR SESION'));
