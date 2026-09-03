@@ -594,6 +594,63 @@ test('la restriccion de red tambien aplica al almacen', async () => {
   }
 });
 
+test('la cabecera X-Forwarded-For solo se cree si viene de un proxy de confianza', async () => {
+  // Hallazgo 2. Con la aplicacion publicada por un tunel, cualquiera que tenga
+  // la direccion podia poner esa cabecera a mano y saltarse la restriccion de
+  // red de la planta y el limite de peticiones.
+  const antes = await api('GET', '/api/admin/configuracion', undefined, 'admin');
+  const valorPrevio = (clave) => {
+    const fila = antes.datos.configuracion.find((c) => c.key === clave);
+    return fila ? fila.value : antes.datos.valores_por_defecto[clave];
+  };
+  const redesOriginales = valorPrevio('redes_permitidas');
+  const restriccionOriginal = valorPrevio('restriccion_red_activa');
+  const configurar = (configuracion) =>
+    api('PUT', '/api/admin/configuracion', { configuracion }, 'admin');
+
+  const entrar = (base, cabeceras) => fetch(`${base}/api/auth/login-pin`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...cabeceras },
+    body: JSON.stringify({ employee_id: 'EMP-002', pin: '300002' })
+  });
+
+  // Un segundo servidor sobre los mismos datos, este si con un proxy declarado.
+  const PUERTO2 = PORT + 1;
+  const BASE2 = `http://127.0.0.1:${PUERTO2}`;
+  const conProxy = spawn(process.execPath, ['server/index.js'], {
+    env: { ...process.env, DATA_DIR, PORT: String(PUERTO2), NODE_NO_WARNINGS: '1', PROXIES_CONFIANZA: '127.0.0.1,::1' },
+    stdio: 'ignore'
+  });
+
+  try {
+    await configurar({ restriccion_red_activa: '1', redes_permitidas: '192.168.50.0/24' });
+    for (let i = 0; i < 60; i++) {
+      try { await fetch(`${BASE2}/api/auth/estado`); break; } catch { await new Promise((r) => setTimeout(r, 100)); }
+    }
+
+    // Sin proxy declarado la cabecera se ignora: sigue bloqueado.
+    assert.equal((await entrar(BASE, {})).status, 403, 'sin la cabecera debe bloquear');
+    assert.equal((await entrar(BASE, { 'X-Forwarded-For': '192.168.50.9' })).status, 403,
+      'la cabecera inventada no debe abrir la puerta');
+    assert.equal((await entrar(BASE, { 'X-Forwarded-For': '192.168.50.9, 10.0.0.1' })).status, 403,
+      'ni con una cadena de direcciones');
+
+    // Declarando el proxy si se respeta, que es como funciona detras del tunel.
+    assert.equal((await entrar(BASE2, { 'X-Forwarded-For': '192.168.50.9' })).status, 200,
+      'con un proxy de confianza la cabecera si vale');
+    assert.equal((await entrar(BASE2, { 'X-Forwarded-For': '8.8.8.8' })).status, 403,
+      'y sigue bloqueando a quien de verdad esta fuera');
+    assert.equal((await entrar(BASE2, {})).status, 403,
+      'sin cabecera detras del proxy manda la direccion del socket');
+  } finally {
+    conProxy.kill();
+    await configurar({
+      restriccion_red_activa: restriccionOriginal,
+      redes_permitidas: redesOriginales
+    });
+  }
+});
+
 test('cerrar sesion invalida la cookie', async () => {
   await api('POST', '/api/auth/logout', {}, 'admin');
   const despues = await api('GET', '/api/auth/me', undefined, 'admin');

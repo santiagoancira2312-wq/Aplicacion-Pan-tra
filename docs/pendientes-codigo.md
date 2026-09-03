@@ -317,7 +317,7 @@ proteccion. Revisar de paso los hallazgos 17 y 18, que son de la misma familia.
 - **23.** La pantalla de crear vale mide casi 5,000 px con un kit. El paso que
   debe tomar menos de un minuto se vuelve un desfile de scroll en telefono.
 
-## [ ] 13. Grupo 4 — El tunel publico (hallazgo 2)
+## [x] 13. Grupo 4 — El tunel publico (hallazgo 2)
 
 Durante la junta la app sale a internet por un tunel, asi que esto deja de ser
 teorico.

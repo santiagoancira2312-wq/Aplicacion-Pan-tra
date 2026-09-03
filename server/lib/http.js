@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { PUBLIC_DIR } from '../config.js';
+import { PUBLIC_DIR, PROXIES_CONFIANZA } from '../config.js';
+import { ipEnCidr } from './net.js';
 
 export class HttpError extends Error {
   constructor(status, message, extra = {}) {
@@ -110,10 +111,33 @@ export async function readJson(req) {
   }
 }
 
+const limpiarIp = (ip) => String(ip || '').trim().replace(/^::ffff:/, '');
+
+const esProxyDeConfianza = (ip) =>
+  !!ip && PROXIES_CONFIANZA.some((c) => c === ip || ipEnCidr(ip, c));
+
+/**
+ * Direccion real del cliente.
+ *
+ * La cabecera X-Forwarded-For solo se cree cuando la peticion llega desde un
+ * proxy declarado de confianza. Creerla siempre deja que cualquiera la escriba
+ * a mano y con eso se salte la restriccion de red de la planta y el limite de
+ * peticiones, que es exactamente lo que pasa cuando la aplicacion sale a
+ * internet por un tunel.
+ */
 export function clientIp(req) {
-  const fwd = req.headers['x-forwarded-for'];
-  if (typeof fwd === 'string' && fwd.length) return fwd.split(',')[0].trim();
-  return (req.socket.remoteAddress || '').replace(/^::ffff:/, '');
+  const socketIp = limpiarIp(req.socket.remoteAddress);
+  if (!esProxyDeConfianza(socketIp)) return socketIp;
+
+  // Se recorre de derecha a izquierda saltando los proxies de confianza: la
+  // primera direccion que no lo sea es la del cliente. Lo que quede mas a la
+  // izquierda lo pudo haber escrito el propio cliente.
+  const cadena = String(req.headers['x-forwarded-for'] || '')
+    .split(',').map(limpiarIp).filter(Boolean);
+  for (let i = cadena.length - 1; i >= 0; i--) {
+    if (!esProxyDeConfianza(cadena[i])) return cadena[i];
+  }
+  return socketIp;
 }
 
 /** Router minimo con patrones estilo /api/vales/:id */

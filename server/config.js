@@ -20,6 +20,19 @@ export const SESSION_MINUTES_PASSWORD = Number(process.env.SESSION_MINUTES_PASSW
 
 export const MAX_LOGIN_ATTEMPTS = 5;
 
+/**
+ * Proxies de confianza (IP o CIDR, separados por coma). Solo cuando la peticion
+ * llega desde uno de ellos se cree la cabecera X-Forwarded-For; en cualquier
+ * otro caso se usa la direccion real del socket.
+ *
+ * Vacio (lo normal en la red local) = la cabecera nunca se cree.
+ * Detras de un tunel hay que declararlo, porque si no todo el mundo llega con
+ * la misma direccion y el limite de peticiones los tumba a todos:
+ *   PROXIES_CONFIANZA=127.0.0.1,::1 npm start
+ */
+export const PROXIES_CONFIANZA = String(process.env.PROXIES_CONFIANZA || '')
+  .split(',').map((s) => s.trim()).filter(Boolean);
+
 // Topes de sensatez para los movimientos de almacen. No son reglas de negocio:
 // existen para que un dedazo (un cero de mas, un menos delante del costo) no
 // deje el inventario y el panel con numeros imposibles, sin forma de deshacerlo
