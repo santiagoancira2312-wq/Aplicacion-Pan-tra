@@ -7,6 +7,7 @@ import { audit } from '../lib/audit.js';
 import { notificar, notificarRol } from '../lib/notify.js';
 import { redAutorizada } from '../lib/net.js';
 import { redondearPorUnidad } from '../lib/unidades.js';
+import { MAX_CANTIDAD_MOVIMIENTO } from '../config.js';
 
 const ESTADOS_ABIERTOS = ['PENDIENTE', 'APROBADO', 'APROBADO_PARCIAL', 'EN_PREPARACION', 'PREPARADO', 'ENTREGA_PARCIAL'];
 
@@ -14,6 +15,21 @@ function num(v, campo) {
   const n = Number(v);
   if (!Number.isFinite(n) || n < 0) throw badRequest(`Cantidad no valida en ${campo}`);
   return Math.round(n * 1000) / 1000;
+}
+
+/**
+ * Tope de sensatez, el mismo que ya tienen las entradas de almacen. No es una
+ * regla de negocio: existe para que un dedazo (un cero de mas) no deje el
+ * comprometido y la pantalla de inventario con numeros imposibles delante del
+ * cliente, sin forma de deshacerlo desde la interfaz.
+ */
+function topeCantidad(cantidad, nombre) {
+  if (cantidad > MAX_CANTIDAD_MOVIMIENTO) {
+    throw badRequest(
+      `La cantidad de ${nombre} es demasiado alta (maximo ${MAX_CANTIDAD_MOVIMIENTO} por linea). Revise si sobra un cero.`
+    );
+  }
+  return cantidad;
 }
 
 /** Cabecera de vale con todos los nombres resueltos. */
@@ -249,6 +265,7 @@ export default function register(r) {
         // La cantidad se ajusta a los decimales que admite la unidad del material.
         cantidad = redondearPorUnidad(cantidad, mat.unidad_id);
         if (cantidad <= 0) throw badRequest(`La cantidad de ${mat.nombre} debe ser mayor a cero`);
+        topeCantidad(cantidad, mat.nombre);
         run(
           `INSERT INTO vale_items
              (vale_id, material_id, vale_kit_id, sku_snapshot, nombre_snapshot, unidad_id,
@@ -379,6 +396,9 @@ export default function register(r) {
         if (autorizada > it.cantidad_solicitada) {
           throw badRequest(`No puede autorizar mas de lo solicitado en ${it.nombre_snapshot}`);
         }
+        // Tambien aqui, no solo al crear: un vale hecho antes de este tope
+        // sigue en la base y el supervisor no deberia poder autorizarlo entero.
+        topeCantidad(autorizada, it.nombre_snapshot);
         if (autorizada < it.cantidad_solicitada) hayRecorte = 1;
         if (autorizada > 0) autorizadasTotales += 1;
         run(

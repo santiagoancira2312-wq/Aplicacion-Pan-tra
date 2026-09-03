@@ -199,7 +199,7 @@ la demostracion.** Al terminar, entrar y salir con `admin@demo.local` y con
 `direccion@demo.local`, con y sin 2FA activo. Si algo queda dudoso, revertir:
 vale mas el hallazgo abierto que quedarse fuera de la app en la junta.
 
-## [ ] 20. Tope de cantidad en los vales (hallazgo 12)
+## [x] 20. Tope de cantidad en los vales (hallazgo 12)
 
 **Antes de la junta.** Un vale acepta `1e15` piezas. Las entradas de almacen ya
 tienen tope desde el grupo 1; los vales no.
@@ -210,6 +210,14 @@ imposibles delante de todos.
 
 Usar el mismo patron y el mismo tope que ya se puso en las entradas, para que el
 mensaje de error sea consistente. Aplica al crear el vale y al autorizar.
+
+**Hecho.** Mismo tope (`MAX_CANTIDAD_MOVIMIENTO`, un millon por linea) y mismo
+mensaje que las entradas: "es demasiado alta (maximo 1000000 por linea). Revise
+si sobra un cero.". Se comprueba en los tres caminos por los que entra una
+cantidad: material suelto, material dentro de un kit, y la autorizacion del
+supervisor. El limite es alto a proposito: mil piezas, que es mucho para un
+vale, pasa sin estorbar. Probado tambien en pantalla: el aviso se lee, la
+ventana queda abierta para corregir y al arreglar la cantidad el vale sale.
 
 ## Hallazgos que quedan abiertos a proposito
 

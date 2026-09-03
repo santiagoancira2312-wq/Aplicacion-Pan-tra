@@ -688,3 +688,70 @@ test('cerrar sesion invalida la cookie', async () => {
   const despues = await api('GET', '/api/auth/me', undefined, 'admin');
   assert.equal(despues.status, 401);
 });
+
+test('un vale rechaza cantidades absurdas, al crearlo y al autorizarlo', async () => {
+  // Hallazgo 12. Las entradas de almacen ya tenian tope; los vales no, asi que
+  // un dedazo con un cero de mas dejaba el comprometido y la pantalla de
+  // inventario con numeros imposibles, sin forma de deshacerlo desde la app.
+  await api('POST', '/api/auth/login-pin', { employee_id: 'EMP-001', pin: '300001' }, 'topeTrab');
+  await api('POST', '/api/auth/login-pin', { employee_id: 'SUP-01', pin: '100001' }, 'topeSup');
+  // Sesion propia: la prueba anterior cierra la de 'admin' a proposito.
+  await api('POST', '/api/auth/login',
+    { usuario: 'admin@demo.local', password: 'Demo.Admin.2026' }, 'topeAdmin');
+
+  const cats = await api('GET', '/api/catalogos', undefined, 'topeTrab');
+  const trailer = cats.datos.trailers[0];
+  const materiales = await api('GET', '/api/materiales?limit=5', undefined, 'topeTrab');
+  const material = materiales.datos.materiales[0];
+  const antes = (await api('GET', `/api/materiales/${material.id}`, undefined, 'topeAdmin')).datos.material.comprometido;
+
+  const crear = (cantidad) => api('POST', '/api/vales', {
+    trailer_id: trailer.id,
+    items: [{ material_id: material.id, cantidad }]
+  }, 'topeTrab');
+
+  // Material suelto.
+  const absurdo = await crear(1e15);
+  assert.equal(absurdo.status, 400, 'una cantidad absurda debe rechazarse al crear el vale');
+  assert.match(absurdo.datos.error, /demasiado alta/i);
+  assert.match(absurdo.datos.error, /sobra un cero/i, 'el mensaje explica el dedazo, como en las entradas');
+
+  // Dentro de un kit, que es el otro camino para llegar a una cantidad.
+  const kits = await api('GET', '/api/kits', undefined, 'topeTrab');
+  const kit = kits.datos.kits.find((k) => k.version_id);
+  const detalleKit = await api('GET', `/api/kits/version/${kit.version_id}`, undefined, 'topeTrab');
+  const enKit = await api('POST', '/api/vales', {
+    trailer_id: trailer.id,
+    kits: [{ kit_id: kit.id, items: [{ material_id: detalleKit.datos.items[0].material_id, cantidad: 9e12 }] }]
+  }, 'topeTrab');
+  assert.equal(enKit.status, 400, 'tambien dentro de un kit');
+  assert.match(enKit.datos.error, /demasiado alta/i);
+
+  // Nada de esto llego a la base.
+  assert.equal(
+    (await api('GET', `/api/materiales/${material.id}`, undefined, 'topeAdmin')).datos.material.comprometido,
+    antes, 'un vale rechazado no compromete existencia'
+  );
+
+  // El limite es alto: una cantidad grande pero razonable sigue pasando.
+  const razonable = await crear(1000);
+  assert.equal(razonable.status, 200, 'mil piezas es mucho, pero es un pedido posible');
+  const valeId = razonable.datos.id;
+  const lineaId = razonable.datos.items[0].id;
+
+  // Al autorizar tambien: un vale creado antes de este tope sigue en la base.
+  const autorizar = (cantidad) => api('POST', `/api/vales/${valeId}/autorizar`, {
+    decision: 'PARCIAL', lineas: [{ id: lineaId, cantidad_autorizada: cantidad }]
+  }, 'topeSup');
+
+  // Primero la puerta de siempre: no mas de lo solicitado.
+  const masDeLoPedido = await autorizar(1e15);
+  assert.equal(masDeLoPedido.status, 400);
+  assert.match(masDeLoPedido.datos.error, /solicitado/i);
+
+  // Y la autorizacion normal sigue funcionando.
+  const buena = await autorizar(900);
+  assert.equal(buena.status, 200, 'la autorizacion normal no se rompe');
+  assert.equal(buena.datos.items[0].cantidad_autorizada, 900);
+  assert.equal(buena.datos.items[0].cantidad_solicitada, 1000, 'la solicitada no se toca');
+});
