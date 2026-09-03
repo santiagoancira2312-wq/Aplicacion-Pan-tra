@@ -88,22 +88,41 @@ contra la que se compara la cotizacion.
 
 **El vale se pide y se recoge con minutos de diferencia**, no de un dia para
 otro: el trabajador lo levanta a las 3:00 y a las 3:10 esta en el mostrador del
-almacen.
+almacen. **El supervisor esta siempre en la planta.**
 
-Consecuencias:
+**NO usar el argumento de "le ahorra viajes al trabajador".** Se penso primero y
+es falso para este cliente: si el supervisor esta a veinte metros, alguien de la
+planta lo va a contradecir en la junta y se cae la credibilidad.
 
-- **El supervisor esta en la ruta critica.** Tiene que autorizar dentro de esa
-  ventana o el trabajador se queda parado. Por eso las notificaciones no son un
-  lujo: sostienen el flujo completo.
-- Con papel son **dos viajes y una busqueda**: llenar el vale, caminar a buscar
-  al supervisor, encontrarlo o no, y luego caminar al almacen.
+Lo que si es cierto, y es mas fuerte:
 
-La frase de venta que sale de aqui, y es de las mejores que hay:
+**El vale de papel es rapido porque no controla nada.** Diez minutos suena
+eficiente, y lo es porque en el camino nadie verifica: el supervisor firma al
+vuelo, muchas veces sin leer, el papel llega al almacen y de ahi al cajon. Nadie
+puede reconstruir despues que salio, para que trailer, ni cuanto costo.
 
-> "El supervisor autoriza desde su telefono en lo que el trabajador camina al
-> almacen. Cuando llega, su material ya esta autorizado."
+> No se les vende velocidad, ya son rapidos. Se les vende que esos mismos diez
+> minutos dejen rastro.
 
-Concreta, medible y entendible por cualquiera. Vale mas que cualquier tablero.
+**El riesgo real del proyecto, entonces, es la friccion.** Si la app tarda mas
+de esos diez minutos, la planta la rechaza: no por lo que le falte, sino porque
+estorba. Por eso la meta de **crear un vale en menos de un minuto** no es un
+capricho de diseno, es la condicion para que el sistema sobreviva.
+
+Consecuencia para la junta: **cronometrar el paso 2 delante de ellos**, con
+alguien de su gente creando el vale. Si sale en 40 segundos, se mata la unica
+objecion seria antes de que la digan.
+
+**Lo que gana el supervisor no es caminar menos: es dejar de ser interrumpido.**
+Hoy cada vale es alguien que lo busca, lo encuentra a media conversacion y le
+pone un papel enfrente, diez o quince veces al dia. Con la app autoriza desde el
+telefono en cinco segundos sin soltar lo que esta haciendo. Eso si lo siente, y
+lo vuelve el mejor aliado dentro de la planta.
+
+Sigue siendo cierto que **el supervisor esta en la ruta critica**: tiene que
+autorizar dentro de esa ventana de minutos o el trabajador se queda parado en el
+mostrador. Por eso las notificaciones sostienen el flujo, y por eso su sesion no
+puede durar 5 minutos (tarea 16 de docs/pendientes-codigo.md).
 
 ## Argumentos especificos para este cliente
 
