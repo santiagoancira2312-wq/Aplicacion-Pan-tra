@@ -90,11 +90,28 @@ contra la que se compara la cotizacion.
 otro: el trabajador lo levanta a las 3:00 y a las 3:10 esta en el mostrador del
 almacen. **El supervisor esta siempre en la planta.**
 
-**NO usar el argumento de "le ahorra viajes al trabajador".** Se penso primero y
-es falso para este cliente: si el supervisor esta a veinte metros, alguien de la
-planta lo va a contradecir en la junta y se cae la credibilidad.
+**Cuidado con el argumento de los viajes: hay dos y solo uno aplica.**
 
-Lo que si es cierto, y es mas fuerte:
+- **NO usar "le ahorra ir a buscar al supervisor".** Es falso aqui: el supervisor
+  esta siempre en la planta y alguien lo va a contradecir en la junta.
+- **SI usar "le ahorra el viaje al almacen por material que no hay".** Este es
+  real y fuerte: hoy el trabajador llena el vale, camina al almacen, hace fila y
+  hasta el mostrador se entera de que no hay existencia. Con papel no hay forma
+  de saberlo antes: el dato vive en el estante y en la cabeza del almacenista.
+  Y no es solo su tiempo perdido, es que **el trailer esta detenido por falta de
+  esa pieza y nadie lo sabia**.
+
+  Momento de demostracion, despues del paso 2: que el trabajador busque a
+  proposito un material agotado, aparece AGOTADO, y se dice *"aqui se ahorro el
+  viaje, y ustedes se acaban de enterar de que hay un trailer parado por esta
+  pieza; hoy se enterarian manana"*. De ahi la tarea 14.
+
+  Condicion honesta, y conviene decirla primero uno mismo: **esto sirve si las
+  entradas se registran.** Si el sistema dice agotado cuando si hay, el
+  trabajador aprende a ignorarlo en dos semanas. Es disciplina que se mete en la
+  capacitacion.
+
+Lo otro que es cierto, y es lo mas fuerte:
 
 **El vale de papel es rapido porque no controla nada.** Diez minutos suena
 eficiente, y lo es porque en el camino nadie verifica: el supervisor firma al

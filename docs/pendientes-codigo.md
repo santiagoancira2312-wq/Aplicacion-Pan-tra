@@ -119,6 +119,10 @@ reclamar. Que el aviso sea imposible de pasar por alto, y que el decida.
 - Que la lista de surtido del almacen tambien marque esas lineas, para que el
   almacenista lo sepa antes de que el trabajador llegue.
 
+**No es un detalle cosmetico: es un momento de la demostracion.** Es la unica
+parte del flujo donde se ve, en pantalla y en un segundo, algo que con papel es
+imposible saber sin caminar al almacen y hacer fila.
+
 Solo presentacion: no tocar consultas ni calculos.
 
 ---
